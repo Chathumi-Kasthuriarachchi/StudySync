@@ -1,120 +1,240 @@
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
 
-//Function to generate token
-const generateToken = (id) => {
-    return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "1h" });
-}
+/**
+ * Generate JWT Token Helper
+ * 
+ * Token contains minimal, non-sensitive payload needed for authorization:
+ * - user ID (for querying the user)
+ * - systemRole (for fast role verification)
+ */
+const generateToken = (id, systemRole) => {
+    return jwt.sign(
+        { id, systemRole },
+        process.env.JWT_SECRET,
+        { expiresIn: "7d" }
+    );
+};
 
-//@desc Register User
-//@route POST /api/auth/register
-//@access Public
-
+/**
+ * @desc    Register a new user
+ * @route   POST /api/auth/register
+ * @access  Public
+ */
 const register = async (req, res) => {
-    const { name, email, password, role } = req.body;
-
-    if (!name || !email || !password) {
-        return res.status(400).json({ message: "Please fill all the fields" });
-    }
-
     try {
-        const userExists = await User.findOne({ email });
-        if (userExists) {
-            return res.status(400).json({ message: "User already exists" });
+        const { name, email, password } = req.body;
+
+        // 1. Validation: required fields
+        if (!name || !email || !password) {
+            return res.status(400).json({
+                success: false,
+                message: "Please provide name, email, and password",
+            });
         }
 
+        // 2. Validation: password strength
+        if (password.length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: "Password must be at least 6 characters long",
+            });
+        }
+
+        // 3. Validation: email uniqueness
+        const userExists = await User.findOne({ email: email.toLowerCase().trim() });
+        if (userExists) {
+            return res.status(400).json({
+                success: false,
+                message: "A user with this email already exists",
+            });
+        }
+
+        // 4. Create User: System Role is STRICTLY set to 'USER' on registration
+        // (Client request body can NEVER assign ADMIN status)
         const user = await User.create({
-            name,
-            email,
-            password,
-            role: role || "user"
+            name: name.trim(),
+            email: email.toLowerCase().trim(),
+            password, // Will be hashed automatically by UserSchema.pre('save')
+            systemRole: "USER",
         });
 
-        res.status(201).json({
-            _id: user._id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-            token: generateToken(user._id)
-        })
+        // 5. Generate authentication token
+        const token = generateToken(user._id, user.systemRole);
+
+        return res.status(201).json({
+            success: true,
+            message: "Registration successful",
+            data: {
+                user: {
+                    id: user._id,
+                    name: user.name,
+                    email: user.email,
+                    systemRole: user.systemRole,
+                    createdAt: user.createdAt,
+                },
+                token,
+            },
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error("Register Controller Error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Server error during registration",
+            error: error.message,
+        });
     }
-}
+};
 
-//@desc Login User
-//@route POST /api/auth/login
-//@access Public
-
+/**
+ * @desc    Authenticate user & get token
+ * @route   POST /api/auth/login
+ * @access  Public
+ */
 const login = async (req, res) => {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-        return res.status(400).json({ message: "Please fill all the fields" });
-    }
-
     try {
-        const user = await User.findOne({ email });
-        if (user && (await user.matchPassword(password))) {
-            res.json({
-                _id: user._id,
-                name: user.name,
-                email: user.email,
-                role: user.role,
-                token: generateToken(user._id)
+        const { email, password } = req.body;
+
+        // 1. Validation: check presence
+        if (!email || !password) {
+            return res.status(400).json({
+                success: false,
+                message: "Please provide email and password",
             });
-        } else {
-            res.status(401).json({ message: "Invalid email or password" });
         }
+
+        // 2. Lookup user by email (case-insensitive)
+        const user = await User.findOne({ email: email.toLowerCase().trim() });
+
+        // 3. Verify user existence and password comparison via bcrypt
+        if (!user || !(await user.matchPassword(password))) {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid email or password",
+            });
+        }
+
+        // 4. Generate token
+        const token = generateToken(user._id, user.systemRole);
+
+        return res.status(200).json({
+            success: true,
+            message: "Login successful",
+            data: {
+                user: {
+                    id: user._id,
+                    name: user.name,
+                    email: user.email,
+                    systemRole: user.systemRole,
+                    createdAt: user.createdAt,
+                },
+                token,
+            },
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error("Login Controller Error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Server error during login",
+            error: error.message,
+        });
     }
-}
+};
 
-//@desc Get User Profile
-//@route GET /api/auth/profile
-//@access Private
-
-const getUserProfile = async (req, res) => {
+/**
+ * @desc    Get currently authenticated user profile
+ * @route   GET /api/auth/me
+ * @access  Private (Requires valid JWT)
+ */
+const getMe = async (req, res) => {
     try {
-        const user = await User.findById(req.user.id).select("-password");
-        res.json(user);
+        // req.user was populated by `protect` middleware
+        return res.status(200).json({
+            success: true,
+            data: {
+                user: {
+                    id: req.user._id,
+                    name: req.user.name,
+                    email: req.user.email,
+                    systemRole: req.user.systemRole,
+                    createdAt: req.user.createdAt,
+                    profileImageURL: req.user.profileImageURL,
+                },
+            },
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error("GetMe Controller Error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Server error retrieving profile",
+            error: error.message,
+        });
     }
-}
+};
 
-//@desc Update Profile
-//@route PUT /api/auth/profile
-//@access Private
+/**
+ * @desc    Verify Admin Authorization
+ * @route   GET /api/auth/admin-check
+ * @access  Private (Requires systemRole === 'ADMIN')
+ */
+const checkAdmin = async (req, res) => {
+    return res.status(200).json({
+        success: true,
+        message: "Admin authorization verified successfully",
+        data: {
+            admin: {
+                id: req.user._id,
+                name: req.user.name,
+                email: req.user.email,
+                systemRole: req.user.systemRole,
+            },
+        },
+    });
+};
 
+/**
+ * @desc    Update user profile
+ * @route   PUT /api/auth/profile
+ * @access  Private
+ */
 const updateProfile = async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
-        if (user) {
-            user.name = req.body.name || user.name;
-            user.email = req.body.email || user.email;
-            user.password = req.body.password || user.password;
-            await user.save();
-            res.json({
-                _id: user._id,
-                name: user.name,
-                email: user.email,
-                role: user.role,
-                token: generateToken(user._id)
-            });
-        } else {
-            res.status(404).json({ message: "User not found" });
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
         }
+
+        if (req.body.name) user.name = req.body.name.trim();
+        if (req.body.password) user.password = req.body.password; // Triggers pre('save') hash
+
+        await user.save();
+
+        return res.status(200).json({
+            success: true,
+            message: "Profile updated successfully",
+            data: {
+                user: {
+                    id: user._id,
+                    name: user.name,
+                    email: user.email,
+                    systemRole: user.systemRole,
+                },
+            },
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        return res.status(500).json({
+            success: false,
+            message: "Server error updating profile",
+            error: error.message,
+        });
     }
-}
+};
 
 module.exports = {
     register,
     login,
-    getUserProfile,
-    updateProfile
-}
+    getMe,
+    getUserProfile: getMe, // backward compatibility
+    checkAdmin,
+    updateProfile,
+};
