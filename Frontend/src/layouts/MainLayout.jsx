@@ -51,9 +51,6 @@ const MainLayout = () => {
                 Study<span className="text-powder-600 dark:text-powder-400">Sync</span>
               </span>
             </Link>
-            <span className="hidden sm:inline-block px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider text-powder-700 dark:text-powder-300 bg-powder-100 dark:bg-powder-950/60 rounded-full border border-powder-200 dark:border-powder-800">
-              Phase 1: Auth
-            </span>
           </div>
 
           {/* Navigation Links & User Actions */}
@@ -155,7 +152,7 @@ const MainLayout = () => {
 
       {/* Footer */}
       <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-6 text-center text-xs text-slate-500 dark:text-slate-400">
-        <p>StudySync &copy; {new Date().getFullYear()} &mdash; Phase 1: Authentication &amp; System Role Foundation</p>
+        <p>StudySync &copy; {new Date().getFullYear()} &mdash; Smart Productivity &amp; Task Management</p>
       </footer>
     </div>
   );

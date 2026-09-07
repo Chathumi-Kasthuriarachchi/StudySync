@@ -115,7 +115,7 @@ const Dashboard = () => {
             {isAdmin ? (
               <span> You have full system-level administrative access.</span>
             ) : (
-              <span> Standard users cannot execute admin endpoints. This separation forms the foundation for project-level roles in later phases.</span>
+              <span> Standard users cannot execute admin endpoints.</span>
             )}
           </p>
 
