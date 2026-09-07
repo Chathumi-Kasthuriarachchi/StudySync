@@ -45,10 +45,10 @@ const MainLayout = () => {
           <div className="flex items-center gap-3">
             <Link to="/" className="flex items-center gap-2 group">
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-powder-500 to-powder-700 flex items-center justify-center text-white font-extrabold shadow-sm group-hover:scale-105 transition">
-                SF
+                SS
               </div>
               <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-                Study<span className="text-powder-600 dark:text-powder-400">Flow</span>
+                Study<span className="text-powder-600 dark:text-powder-400">Sync</span>
               </span>
             </Link>
             <span className="hidden sm:inline-block px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider text-powder-700 dark:text-powder-300 bg-powder-100 dark:bg-powder-950/60 rounded-full border border-powder-200 dark:border-powder-800">
@@ -80,10 +80,9 @@ const MainLayout = () => {
                 <NavLink
                   to="/dashboard"
                   className={({ isActive }) =>
-                    `px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                      isActive
-                        ? 'bg-powder-100 dark:bg-powder-900/60 text-powder-700 dark:text-powder-300'
-                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    `px-3 py-1.5 rounded-lg text-sm font-medium transition ${isActive
+                      ? 'bg-powder-100 dark:bg-powder-900/60 text-powder-700 dark:text-powder-300'
+                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                     }`
                   }
                 >
@@ -112,10 +111,9 @@ const MainLayout = () => {
                 <NavLink
                   to="/"
                   className={({ isActive }) =>
-                    `px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                      isActive
-                        ? 'bg-powder-50 dark:bg-powder-900/60 text-powder-700 dark:text-powder-300'
-                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    `px-3 py-1.5 rounded-lg text-sm font-medium transition ${isActive
+                      ? 'bg-powder-50 dark:bg-powder-900/60 text-powder-700 dark:text-powder-300'
+                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                     }`
                   }
                 >
@@ -124,10 +122,9 @@ const MainLayout = () => {
                 <NavLink
                   to="/login"
                   className={({ isActive }) =>
-                    `px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                      isActive
-                        ? 'bg-powder-50 dark:bg-powder-900/60 text-powder-700 dark:text-powder-300'
-                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    `px-3 py-1.5 rounded-lg text-sm font-medium transition ${isActive
+                      ? 'bg-powder-50 dark:bg-powder-900/60 text-powder-700 dark:text-powder-300'
+                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                     }`
                   }
                 >

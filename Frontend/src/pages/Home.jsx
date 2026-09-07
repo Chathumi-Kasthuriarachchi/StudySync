@@ -25,14 +25,12 @@ const Home = () => {
       <div className="relative z-10 flex flex-col items-center justify-center text-center py-16 px-4 sm:px-6 w-full">
         <div className="max-w-2xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-powder-700 dark:text-powder-300 bg-powder-100 dark:bg-powder-950/60 rounded-full mb-6 border border-powder-200 dark:border-powder-800">
-            <span className="w-1.5 h-1.5 rounded-full bg-mint-500"></span>
-            Phase 1: Authentication &amp; System RBAC
           </div>
 
           <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-900 dark:text-white tracking-tight mb-4 leading-tight">
             Welcome to{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-powder-600 to-mint-500">
-              StudyFlow
+              StudySync
             </span>
           </h1>
 
