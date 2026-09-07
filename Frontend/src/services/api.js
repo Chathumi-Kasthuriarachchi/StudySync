@@ -20,7 +20,7 @@ const api = axios.create({
 // Request Interceptor: Inject JWT Token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('studyflow_token');
+    const token = localStorage.getItem('studysync_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -35,9 +35,9 @@ api.interceptors.response.use(
   (error) => {
     if (error.response && error.response.status === 401) {
       // Token is invalid or expired
-      const token = localStorage.getItem('studyflow_token');
+      const token = localStorage.getItem('studysync_token');
       if (token && window.location.pathname !== '/login') {
-        localStorage.removeItem('studyflow_token');
+        localStorage.removeItem('studysync_token');
         // Let the AuthContext or page state respond gracefully
       }
     }

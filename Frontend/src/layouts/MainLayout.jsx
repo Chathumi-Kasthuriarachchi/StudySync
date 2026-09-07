@@ -18,16 +18,16 @@ const MainLayout = () => {
 
   // Dark mode state
   const [darkMode, setDarkMode] = useState(() => {
-    return localStorage.getItem('studyflow_theme') === 'dark';
+    return localStorage.getItem('studysync_theme') === 'dark';
   });
 
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
-      localStorage.setItem('studyflow_theme', 'dark');
+      localStorage.setItem('studysync_theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
-      localStorage.setItem('studyflow_theme', 'light');
+      localStorage.setItem('studysync_theme', 'light');
     }
   }, [darkMode]);
 
@@ -155,7 +155,7 @@ const MainLayout = () => {
 
       {/* Footer */}
       <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-6 text-center text-xs text-slate-500 dark:text-slate-400">
-        <p>StudyFlow &copy; {new Date().getFullYear()} &mdash; Phase 1: Authentication &amp; System Role Foundation</p>
+        <p>StudySync &copy; {new Date().getFullYear()} &mdash; Phase 1: Authentication &amp; System Role Foundation</p>
       </footer>
     </div>
   );

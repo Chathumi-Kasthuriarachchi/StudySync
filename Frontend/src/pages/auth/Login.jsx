@@ -59,7 +59,7 @@ const Login = () => {
           Welcome back
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          Enter your credentials to access your StudyFlow dashboard
+          Enter your credentials to access your StudySync dashboard
         </p>
       </div>
 
@@ -124,8 +124,8 @@ const Login = () => {
       <div className="mt-6 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 text-xs text-slate-500 dark:text-slate-400">
         <p className="font-semibold text-slate-700 dark:text-slate-300 mb-1">Development Credentials:</p>
         <div className="flex flex-col gap-1 font-mono text-[11px]">
-          <span>Admin: <code>admin@studyflow.com</code> / <code>Admin123!</code></span>
-          <span>User:  <code>jane@studyflow.com</code> / <code>Password123!</code></span>
+          <span>Admin: <code>admin@studysync.com</code> / <code>Admin123!</code></span>
+          <span>User:  <code>jane@studysync.com</code> / <code>Password123!</code></span>
         </div>
       </div>
 

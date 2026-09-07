@@ -13,12 +13,12 @@ const AuthContext = createContext(null);
  */
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(() => localStorage.getItem('studyflow_token'));
+  const [token, setToken] = useState(() => localStorage.getItem('studysync_token'));
   const [loading, setLoading] = useState(true);
 
   // Restore authenticated session on initial mount
   const checkAuth = useCallback(async () => {
-    const savedToken = localStorage.getItem('studyflow_token');
+    const savedToken = localStorage.getItem('studysync_token');
     if (!savedToken) {
       setUser(null);
       setLoading(false);
@@ -34,7 +34,7 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (err) {
       console.warn('Session restoration failed:', err.message);
-      localStorage.removeItem('studyflow_token');
+      localStorage.removeItem('studysync_token');
       setUser(null);
       setToken(null);
     } finally {
@@ -53,7 +53,7 @@ export const AuthProvider = ({ children }) => {
     const response = await api.post('/api/auth/login', { email, password });
     if (response.data?.success && response.data?.data) {
       const { user: userData, token: jwtToken } = response.data.data;
-      localStorage.setItem('studyflow_token', jwtToken);
+      localStorage.setItem('studysync_token', jwtToken);
       setToken(jwtToken);
       setUser(userData);
       return userData;
@@ -68,7 +68,7 @@ export const AuthProvider = ({ children }) => {
     const response = await api.post('/api/auth/register', { name, email, password });
     if (response.data?.success && response.data?.data) {
       const { user: userData, token: jwtToken } = response.data.data;
-      localStorage.setItem('studyflow_token', jwtToken);
+      localStorage.setItem('studysync_token', jwtToken);
       setToken(jwtToken);
       setUser(userData);
       return userData;
@@ -80,7 +80,7 @@ export const AuthProvider = ({ children }) => {
    * Logout User
    */
   const logout = () => {
-    localStorage.removeItem('studyflow_token');
+    localStorage.removeItem('studysync_token');
     setToken(null);
     setUser(null);
   };
