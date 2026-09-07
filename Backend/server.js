@@ -47,7 +47,7 @@ app.get("/api/health", (req, res) => {
 
 // Root informational endpoint
 app.get("/", (req, res) => {
-    res.json({ message: "StudyFlow API is active" });
+    res.json({ message: "StudySync API is active" });
 });
 
 // API Routes

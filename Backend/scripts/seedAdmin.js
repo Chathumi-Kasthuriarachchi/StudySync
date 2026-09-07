@@ -13,7 +13,7 @@ const seedAdmin = async () => {
         await mongoose.connect(mongoUri);
         console.log("Connected to MongoDB for admin seeding...");
 
-        const adminEmail = process.env.INITIAL_ADMIN_EMAIL || "admin@studyflow.com";
+        const adminEmail = process.env.INITIAL_ADMIN_EMAIL || "admin@studysync.com";
         const adminPassword = process.env.INITIAL_ADMIN_PASSWORD || "Admin123!";
         const adminName = "System Administrator";
 
