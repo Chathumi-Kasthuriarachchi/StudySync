@@ -1,4 +1,4 @@
-# StudyFlow
+# StudySync
 
 A smart task and productivity management platform for individuals and teams to organize projects, manage tasks, track productivity, and improve work planning.
 
