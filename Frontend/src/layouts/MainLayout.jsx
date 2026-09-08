@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 /**
@@ -15,6 +15,7 @@ import { useAuth } from '../context/AuthContext';
 const MainLayout = () => {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Dark mode state
   const [darkMode, setDarkMode] = useState(() => {
@@ -142,7 +143,7 @@ const MainLayout = () => {
       {/* Main Content Viewport */}
       <main
         className={
-          location.pathname === '/'
+          ['/', '/login', '/signup'].includes(location.pathname)
             ? 'flex-1 w-full relative flex flex-col'
             : 'flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8'
         }
