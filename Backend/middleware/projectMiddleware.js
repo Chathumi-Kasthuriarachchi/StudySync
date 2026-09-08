@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Project = require("../models/Project");
 const ProjectMembership = require("../models/ProjectMembership");
+const Task = require("../models/Task");
 
 /**
  * requireProjectMember Middleware
@@ -84,7 +85,66 @@ const requireProjectRole = (...allowedRoles) => {
     };
 };
 
+/**
+ * requireTaskAccess Middleware
+ *
+ * Verifies that a task exists and the authenticated user is an active member
+ * of the project that owns the task.
+ *
+ * Attaches to req:
+ * - req.task: The Mongoose task document
+ * - req.project: The Mongoose project document
+ * - req.membership: The Mongoose membership document
+ */
+const requireTaskAccess = async (req, res, next) => {
+    try {
+        const taskId = req.params.taskId || req.params.id;
+
+        if (!taskId || !mongoose.Types.ObjectId.isValid(taskId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid task ID format",
+            });
+        }
+
+        const task = await Task.findById(taskId);
+        if (!task) {
+            return res.status(404).json({
+                success: false,
+                message: "Task not found",
+            });
+        }
+
+        const membership = await ProjectMembership.findOne({
+            project: task.project,
+            user: req.user._id,
+        });
+
+        if (!membership) {
+            return res.status(403).json({
+                success: false,
+                message: "Access denied. You are not a member of the project this task belongs to.",
+            });
+        }
+
+        const project = await Project.findById(task.project);
+
+        req.task = task;
+        req.project = project;
+        req.membership = membership;
+        next();
+    } catch (err) {
+        console.error("requireTaskAccess error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Task authorization check failed",
+            error: err.message,
+        });
+    }
+};
+
 module.exports = {
     requireProjectMember,
     requireProjectRole,
+    requireTaskAccess,
 };

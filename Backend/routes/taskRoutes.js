@@ -1,10 +1,37 @@
 const express = require("express");
 const router = express.Router();
 
-// Placeholder for Phase 2+ Task routes
-// GET /api/tasks
-router.get("/", (req, res) => {
-    res.json({ success: true, message: "Tasks endpoint active" });
-});
+const { protect } = require("../middleware/authMiddleware");
+const { requireTaskAccess } = require("../middleware/projectMiddleware");
+
+const {
+    getMyTasks,
+    getTaskById,
+    updateTask,
+    updateTaskStatus,
+    deleteTask,
+    addSubtask,
+    toggleSubtask,
+    deleteSubtask,
+} = require("../controllers/taskController");
+
+// Protect all task routes
+router.use(protect);
+
+// ── Global User Tasks ─────────────────────────────────────────────────────────
+router.get("/my", getMyTasks);
+
+// ── Task Specific Operations ──────────────────────────────────────────────────
+router.route("/:taskId")
+    .get(requireTaskAccess, getTaskById)
+    .put(requireTaskAccess, updateTask)
+    .delete(requireTaskAccess, deleteTask);
+
+router.patch("/:taskId/status", requireTaskAccess, updateTaskStatus);
+
+// ── Subtasks Operations ───────────────────────────────────────────────────────
+router.post("/:taskId/subtasks", requireTaskAccess, addSubtask);
+router.patch("/:taskId/subtasks/:subtaskId", requireTaskAccess, toggleSubtask);
+router.delete("/:taskId/subtasks/:subtaskId", requireTaskAccess, deleteSubtask);
 
 module.exports = router;

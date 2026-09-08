@@ -1,56 +1,104 @@
 const mongoose = require("mongoose");
 
-const todoSchema = new mongoose.Schema({
-    text: {
+const subtaskSchema = new mongoose.Schema({
+    title: {
         type: String,
-        required: true
+        required: [true, "Subtask title is required"],
+        trim: true,
+        maxlength: [200, "Subtask title cannot exceed 200 characters"],
     },
     completed: {
         type: Boolean,
-        default: false
-    }
-})
-
-const taskSchema = new mongoose.Schema({
-    title: {
-        type: String,
-        required: true
+        default: false,
     },
-    description: {
-        type: String,
-    },
-    priority: {
-        type: String,
-        enum: ["High", "Medium", "Low"],
-        default: "Medium"
-    },
-    status: {
-        type: String,
-        enum: ["Pending", "InProgress", "Completed"],
-        default: "Pending"
-    },
-    dueDate: {
+    createdAt: {
         type: Date,
-        required: true
+        default: Date.now,
     },
-    assignedTo: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
+});
+
+const taskSchema = new mongoose.Schema(
+    {
+        project: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Project",
+            required: [true, "Project reference is required"],
+        },
+        title: {
+            type: String,
+            required: [true, "Task title is required"],
+            trim: true,
+            maxlength: [200, "Task title cannot exceed 200 characters"],
+        },
+        description: {
+            type: String,
+            trim: true,
+            maxlength: [2000, "Description cannot exceed 2000 characters"],
+            default: "",
+        },
+        status: {
+            type: String,
+            enum: {
+                values: ["TODO", "IN_PROGRESS", "COMPLETED"],
+                message: "{VALUE} is not a valid task status",
+            },
+            default: "TODO",
+        },
+        priority: {
+            type: String,
+            enum: {
+                values: ["LOW", "MEDIUM", "HIGH", "URGENT"],
+                message: "{VALUE} is not a valid task priority",
+            },
+            default: "MEDIUM",
+        },
+        assignee: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null,
+        },
+        createdBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: [true, "Creator reference is required"],
+        },
+        startDate: {
+            type: Date,
+            default: null,
+        },
+        dueDate: {
+            type: Date,
+            default: null,
+        },
+        tags: [
+            {
+                type: String,
+                trim: true,
+                maxlength: [50, "Tag cannot exceed 50 characters"],
+            },
+        ],
+        subtasks: [subtaskSchema],
     },
-    createdBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-    },
-    attachments: [{ type: String }],
-    todoChecklist: [todoSchema],
-    progress: {
-        type: Number,
-        default: 0
+    {
+        timestamps: true,
     }
-
-
-},
-    { timestamps: true }
 );
+
+// Timeline validation: dueDate cannot be before startDate if both exist
+taskSchema.pre("validate", function () {
+    if (this.startDate && this.dueDate) {
+        const start = new Date(this.startDate);
+        const due = new Date(this.dueDate);
+        if (due < start) {
+            this.invalidate("dueDate", "Due date cannot be before start date");
+        }
+    }
+});
+
+// Indexes for performance
+taskSchema.index({ project: 1, status: 1 });
+taskSchema.index({ project: 1, dueDate: 1 });
+taskSchema.index({ assignee: 1, status: 1 });
+taskSchema.index({ project: 1, priority: 1 });
 
 module.exports = mongoose.model("Task", taskSchema);

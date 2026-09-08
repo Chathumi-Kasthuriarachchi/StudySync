@@ -31,6 +31,11 @@ const {
     rejectInvitation,
 } = require("../controllers/projectInvitationController");
 
+const {
+    createTask,
+    getProjectTasks,
+} = require("../controllers/taskController");
+
 // All project endpoints require valid user authentication
 router.use(protect);
 
@@ -69,5 +74,10 @@ router.delete(
     requireProjectRole("OWNER", "MANAGER"),
     cancelInvitation
 );
+
+// ── Project Tasks Management ──────────────────────────────────────────────────
+router.route("/:id/tasks")
+    .get(requireProjectMember, getProjectTasks)
+    .post(requireProjectMember, createTask);
 
 module.exports = router;
