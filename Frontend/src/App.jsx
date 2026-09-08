@@ -18,6 +18,7 @@ import Privacy from './pages/Privacy';
 import Dashboard from './pages/Dashboard';
 import Tasks from './pages/Tasks';
 import Projects from './pages/Projects';
+import ProjectDetails from './pages/ProjectDetails';
 import Calendar from './pages/Calendar';
 import Focus from './pages/Focus';
 import Analytics from './pages/Analytics';
@@ -70,6 +71,7 @@ const App = () => {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/tasks" element={<Tasks />} />
               <Route path="/projects" element={<Projects />} />
+              <Route path="/projects/:id" element={<ProjectDetails />} />
               <Route path="/calendar" element={<Calendar />} />
               <Route path="/focus" element={<Focus />} />
               <Route path="/analytics" element={<Analytics />} />
