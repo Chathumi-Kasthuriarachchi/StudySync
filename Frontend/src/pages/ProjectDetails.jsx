@@ -11,6 +11,7 @@ import {
   Trash2,
   AlertTriangle,
   CheckCircle2,
+  CheckSquare,
   X,
   Layers,
   Edit3,
@@ -34,6 +35,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { getRoleBadge, getStatusBadge, calculateTimeline } from './Projects';
 import InviteMemberModal from '../components/projects/InviteMemberModal';
+import ProjectTasksTab from '../components/projects/ProjectTasksTab';
 
 /**
  * Format date helper for input fields (YYYY-MM-DD)
@@ -310,6 +312,7 @@ const ProjectDetails = () => {
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-px overflow-x-auto scrollbar-none">
         {[
           { id: 'overview', label: 'Overview', icon: Layers },
+          { id: 'tasks', label: 'Tasks', icon: CheckSquare },
           { id: 'timeline', label: 'Timeline', icon: Clock },
           { id: 'members', label: `Members (${members.length})`, icon: Users },
           { id: 'settings', label: 'Settings', icon: SettingsIcon },
@@ -504,7 +507,16 @@ const ProjectDetails = () => {
         </div>
       )}
 
-      {/* ── TAB 2: TIMELINE ─────────────────────────────────────────────────── */}
+      {/* ── TAB 2: TASKS ─────────────────────────────────────────────────────── */}
+      {activeTab === 'tasks' && (
+        <ProjectTasksTab
+          projectId={id}
+          projectRole={project.userRole}
+          members={members}
+        />
+      )}
+
+      {/* ── TAB 3: TIMELINE ─────────────────────────────────────────────────── */}
       {activeTab === 'timeline' && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-6 sm:p-8 shadow-xs space-y-8 animate-fadeIn">
           <div>
