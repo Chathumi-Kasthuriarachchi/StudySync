@@ -39,6 +39,7 @@
 @layer base {
   html {
     font-family: var(--font-sans);
+    scroll-behavior: smooth;
     @apply font-sans;
   }
 
