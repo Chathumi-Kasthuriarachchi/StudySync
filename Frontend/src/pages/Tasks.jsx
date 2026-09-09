@@ -74,6 +74,12 @@ const Tasks = () => {
     else if (task.status === 'IN_PROGRESS') nextStatus = 'COMPLETED';
     else if (task.status === 'COMPLETED') nextStatus = 'TODO';
 
+    // Subtask completion guard
+    if (nextStatus === 'COMPLETED' && task.subtasks?.length > 0 && task.subtasks.some((s) => !s.completed)) {
+      setError(`Cannot mark "${task.title}" as completed: all subtasks must be completed first.`);
+      return;
+    }
+
     try {
       // Optimistic local update
       setTasks((prev) =>
@@ -84,8 +90,10 @@ const Tasks = () => {
         setTasks((prev) =>
           prev.map((t) => (t._id === task._id ? res.data : t))
         );
+        setError('');
       }
     } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update task status');
       fetchTasks();
     }
   };
@@ -229,6 +237,23 @@ const Tasks = () => {
           </button>
         </div>
       </div>
+
+      {/* ── Error Banner ────────────────────────────────────────────────────── */}
+      {error && (
+        <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 flex items-center justify-between gap-3 text-rose-700 dark:text-rose-300 text-xs shadow-2xs">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span className="font-semibold">{error}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setError('')}
+            className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-200 font-bold px-1"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* ── Metric Banner ───────────────────────────────────────────────────── */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-6 shadow-xs space-y-4">

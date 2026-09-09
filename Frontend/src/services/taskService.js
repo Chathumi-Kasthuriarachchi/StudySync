@@ -64,6 +64,11 @@ export const toggleSubtask = async (taskId, subtaskId, data) => {
   return res.data;
 };
 
+export const updateSubtask = async (taskId, subtaskId, data) => {
+  const res = await api.put(`/api/tasks/${taskId}/subtasks/${subtaskId}`, data);
+  return res.data;
+};
+
 export const deleteSubtask = async (taskId, subtaskId) => {
   const res = await api.delete(`/api/tasks/${taskId}/subtasks/${subtaskId}`);
   return res.data;

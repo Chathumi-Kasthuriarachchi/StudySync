@@ -20,6 +20,8 @@ import {
   MessageSquare,
   Send,
   History,
+  Pencil,
+  Check,
 } from 'lucide-react';
 import {
   updateTask,
@@ -27,6 +29,7 @@ import {
   deleteTask,
   addSubtask,
   toggleSubtask,
+  updateSubtask,
   deleteSubtask,
 } from '../../services/taskService';
 import {
@@ -150,6 +153,11 @@ const TaskDetailsModal = ({
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [subtaskLoading, setSubtaskLoading] = useState(false);
 
+  // Subtask inline editing state
+  const [editingSubtaskId, setEditingSubtaskId] = useState(null);
+  const [editingSubtaskTitle, setEditingSubtaskTitle] = useState('');
+  const [editingSubtaskLoading, setEditingSubtaskLoading] = useState(false);
+
   // Status & error
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -223,10 +231,19 @@ const TaskDetailsModal = ({
   const handleStatusChange = async (newStatus) => {
     if (isViewer || newStatus === task.status) return;
 
+    if (newStatus === 'COMPLETED' && task.subtasks && task.subtasks.length > 0) {
+      const hasIncomplete = task.subtasks.some((st) => !st.completed);
+      if (hasIncomplete) {
+        setError('Cannot mark task as completed until all subtasks are completed.');
+        return;
+      }
+    }
+
     try {
       const res = await updateTaskStatus(task._id, newStatus);
       if (res.success && res.data) {
         setTask(res.data);
+        setError('');
         if (onTaskUpdated) onTaskUpdated(res.data);
       }
     } catch (err) {
@@ -234,7 +251,7 @@ const TaskDetailsModal = ({
     }
   };
 
-  // ── Subtask Toggle ──────────────────────────────────────────────────────────
+  // ── Subtask Toggle & Edit ───────────────────────────────────────────────────
   const handleToggleSubtask = async (subtaskId, currentCompleted) => {
     if (isViewer) return;
 
@@ -244,10 +261,45 @@ const TaskDetailsModal = ({
       });
       if (res.success && res.data) {
         setTask(res.data);
+        setError('');
         if (onTaskUpdated) onTaskUpdated(res.data);
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to update subtask');
+    }
+  };
+
+  const handleStartEditSubtask = (st) => {
+    if (isViewer) return;
+    setEditingSubtaskId(st._id);
+    setEditingSubtaskTitle(st.title);
+    setError('');
+  };
+
+  const handleCancelEditSubtask = () => {
+    setEditingSubtaskId(null);
+    setEditingSubtaskTitle('');
+  };
+
+  const handleSaveSubtask = async (subtaskId) => {
+    if (isViewer || !editingSubtaskTitle.trim()) return;
+
+    try {
+      setEditingSubtaskLoading(true);
+      const res = await updateSubtask(task._id, subtaskId, {
+        title: editingSubtaskTitle.trim(),
+      });
+      if (res.success && res.data) {
+        setTask(res.data);
+        setEditingSubtaskId(null);
+        setEditingSubtaskTitle('');
+        setError('');
+        if (onTaskUpdated) onTaskUpdated(res.data);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update subtask title');
+    } finally {
+      setEditingSubtaskLoading(false);
     }
   };
 
@@ -643,14 +695,26 @@ const TaskDetailsModal = ({
                     {['TODO', 'IN_PROGRESS', 'COMPLETED'].map((st) => {
                       const isActive = task.status === st;
                       const badge = getTaskStatusBadge(st);
+                      const isCompleteBlocked =
+                        st === 'COMPLETED' &&
+                        subtasksList.length > 0 &&
+                        subtasksList.some((s) => !s.completed);
                       return (
                         <button
                           key={st}
                           type="button"
+                          disabled={isCompleteBlocked}
+                          title={
+                            isCompleteBlocked
+                              ? 'Complete all subtasks first before marking completed'
+                              : undefined
+                          }
                           onClick={() => handleStatusChange(st)}
                           className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
                             isActive
                               ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
+                              : isCompleteBlocked
+                              ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-60'
                               : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                           }`}
                         >
@@ -783,37 +847,86 @@ const TaskDetailsModal = ({
                       key={st._id}
                       className="group p-2.5 rounded-xl border border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-950 flex items-center justify-between gap-3 text-xs transition hover:border-powder-200 dark:hover:border-powder-800"
                     >
-                      <button
-                        type="button"
-                        disabled={isViewer}
-                        onClick={() => handleToggleSubtask(st._id, st.completed)}
-                        className="flex items-center gap-2.5 flex-1 text-left"
-                      >
-                        {st.completed ? (
-                          <CheckCircle2 className="w-4 h-4 text-mint-500 shrink-0" />
-                        ) : (
-                          <Circle className="w-4 h-4 text-slate-300 dark:text-slate-600 shrink-0" />
-                        )}
-                        <span
-                          className={`transition ${
-                            st.completed
-                              ? 'line-through text-slate-400 dark:text-slate-500'
-                              : 'text-slate-800 dark:text-slate-200 font-medium'
-                          }`}
+                      {editingSubtaskId === st._id ? (
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            handleSaveSubtask(st._id);
+                          }}
+                          className="flex items-center gap-2 flex-1 min-w-0"
                         >
-                          {st.title}
-                        </span>
-                      </button>
+                          <input
+                            type="text"
+                            autoFocus
+                            value={editingSubtaskTitle}
+                            onChange={(e) => setEditingSubtaskTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') handleCancelEditSubtask();
+                            }}
+                            className="flex-1 px-2.5 py-1 rounded-lg border border-powder-300 dark:border-powder-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs focus:outline-hidden focus:ring-2 focus:ring-powder-500/30 transition"
+                          />
+                          <button
+                            type="submit"
+                            disabled={editingSubtaskLoading || !editingSubtaskTitle.trim()}
+                            className="p-1 rounded-md text-mint-600 dark:text-mint-400 hover:bg-mint-50 dark:hover:bg-mint-950/60 transition disabled:opacity-50"
+                            title="Save subtask"
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCancelEditSubtask}
+                            className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
+                            title="Cancel"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </form>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            disabled={isViewer}
+                            onClick={() => handleToggleSubtask(st._id, st.completed)}
+                            className="flex items-center gap-2.5 flex-1 text-left min-w-0"
+                          >
+                            {st.completed ? (
+                              <CheckCircle2 className="w-4 h-4 text-mint-500 shrink-0" />
+                            ) : (
+                              <Circle className="w-4 h-4 text-slate-300 dark:text-slate-600 shrink-0" />
+                            )}
+                            <span
+                              className={`truncate transition ${
+                                st.completed
+                                  ? 'line-through text-slate-400 dark:text-slate-500'
+                                  : 'text-slate-800 dark:text-slate-200 font-medium'
+                              }`}
+                            >
+                              {st.title}
+                            </span>
+                          </button>
 
-                      {!isViewer && (
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteSubtask(st._id)}
-                          className="text-slate-300 dark:text-slate-600 hover:text-rose-500 transition opacity-0 group-hover:opacity-100"
-                          title="Delete subtask"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                          {!isViewer && (
+                            <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition">
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditSubtask(st)}
+                                className="p-1 rounded text-slate-400 hover:text-powder-600 dark:hover:text-powder-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                                title="Edit subtask"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSubtask(st._id)}
+                                className="p-1 rounded text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
+                                title="Delete subtask"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   ))}
