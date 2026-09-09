@@ -1,4 +1,6 @@
 require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
+const dns = require("dns");
+dns.setServers(["8.8.8.8", "1.1.1.1"]);
 const mongoose = require("mongoose");
 const User = require("../models/User");
 
@@ -21,17 +23,19 @@ const seedAdmin = async () => {
 
         if (adminUser) {
             console.log(`Admin account (${adminEmail}) already exists.`);
-            if (adminUser.systemRole !== "ADMIN") {
-                adminUser.systemRole = "ADMIN";
-                await adminUser.save();
-                console.log(`Promoted existing user to systemRole: ADMIN`);
-            }
+            adminUser.systemRole = "ADMIN";
+            adminUser.emailVerified = true;
+            adminUser.termsAccepted = true;
+            await adminUser.save();
+            console.log(`Updated existing user: ADMIN, emailVerified: true`);
         } else {
             adminUser = await User.create({
                 name: adminName,
                 email: adminEmail,
                 password: adminPassword, // Will be hashed by pre('save') hook
                 systemRole: "ADMIN",
+                emailVerified: true,
+                termsAccepted: true,
             });
             console.log(`Created new ADMIN user: ${adminEmail}`);
         }
