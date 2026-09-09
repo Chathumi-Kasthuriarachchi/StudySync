@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Task = require("../models/Task");
 const Project = require("../models/Project");
 const ProjectMembership = require("../models/ProjectMembership");
+const TaskActivity = require("../models/TaskActivity");
 const { logTaskActivity } = require("../utils/activityLogger");
 
 /**
@@ -251,7 +252,7 @@ const getProjectTasks = async (req, res) => {
  */
 const getMyTasks = async (req, res) => {
     try {
-        const { status, priority, projectId, search, type } = req.query;
+        const { status, priority, projectId, search, type, due } = req.query;
         const normalizedType = type ? type.toUpperCase() : 'ALL';
 
         const conditions = [];
@@ -289,6 +290,28 @@ const getMyTasks = async (req, res) => {
 
         if (priority && ['LOW', 'MEDIUM', 'HIGH', 'URGENT'].includes(priority.toUpperCase())) {
             conditions.push({ priority: priority.toUpperCase() });
+        }
+
+        if (due) {
+            const now = new Date();
+            const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+            const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+            const normalizedDue = due.toLowerCase();
+
+            if (normalizedDue === 'today') {
+                conditions.push({
+                    dueDate: { $gte: startOfToday, $lte: endOfToday },
+                });
+            } else if (normalizedDue === 'overdue') {
+                conditions.push({
+                    dueDate: { $lt: startOfToday },
+                    status: { $ne: 'COMPLETED' },
+                });
+            } else if (normalizedDue === 'upcoming') {
+                conditions.push({
+                    dueDate: { $gte: startOfToday },
+                });
+            }
         }
 
         if (search && search.trim()) {
@@ -1039,6 +1062,143 @@ const getPersonalTasks = async (req, res) => {
     }
 };
 
+/**
+ * getDashboardSummary
+ * GET /api/tasks/dashboard-summary
+ *
+ * Aggregates all productivity metrics and lists for the authenticated user's main dashboard:
+ * - Metrics: totalTasks, todoCount, inProgressCount, completedCount, dueTodayCount, overdueCount, completedThisWeek, personalCount, projectCount, activeProjectsCount
+ * - Due Today Tasks: tasks due today
+ * - Upcoming Tasks: upcoming tasks (due today or future, incomplete)
+ * - Overdue Tasks: incomplete tasks with dueDate < startOfToday
+ * - Recent Tasks: top 5 latest updated/created tasks
+ * - Recent Activities: latest task/project audit events for the user
+ */
+const getDashboardSummary = async (req, res) => {
+    try {
+        const memberships = await ProjectMembership.find({ user: req.user._id }).select('project');
+        const userProjectIds = memberships.map((m) => m.project);
+
+        const baseCondition = {
+            $or: [
+                { project: null, createdBy: req.user._id },
+                { project: { $in: userProjectIds }, assignee: req.user._id },
+            ],
+        };
+
+        const allTasks = await Task.find(baseCondition)
+            .populate('project', '_id name status dueDate')
+            .populate('assignee', '_id name email profileImageURL')
+            .populate('createdBy', '_id name email profileImageURL')
+            .sort({ dueDate: 1, createdAt: -1 });
+
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+        const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        const startOfWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+        let todoCount = 0;
+        let inProgressCount = 0;
+        let completedCount = 0;
+        let personalCount = 0;
+        let projectCount = 0;
+        let completedThisWeekCount = 0;
+
+        const dueTodayTasks = [];
+        const upcomingTasks = [];
+        const overdueTasks = [];
+
+        for (const task of allTasks) {
+            if (task.project) {
+                projectCount++;
+            } else {
+                personalCount++;
+            }
+
+            if (task.status === 'COMPLETED') {
+                completedCount++;
+                if (task.updatedAt && new Date(task.updatedAt) >= startOfWeek) {
+                    completedThisWeekCount++;
+                }
+            } else if (task.status === 'IN_PROGRESS') {
+                inProgressCount++;
+            } else {
+                todoCount++;
+            }
+
+            if (task.dueDate) {
+                const dueTime = new Date(task.dueDate).getTime();
+                const isDueToday = dueTime >= startOfToday.getTime() && dueTime <= endOfToday.getTime();
+                const isOverdue = dueTime < startOfToday.getTime() && task.status !== 'COMPLETED';
+                const isUpcoming = dueTime >= startOfToday.getTime() && task.status !== 'COMPLETED';
+
+                if (isDueToday) {
+                    dueTodayTasks.push(task);
+                }
+                if (isOverdue) {
+                    overdueTasks.push(task);
+                }
+                if (isUpcoming) {
+                    upcomingTasks.push(task);
+                }
+            }
+        }
+
+        // Sort upcoming tasks by due date ascending
+        upcomingTasks.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+
+        // Get recent tasks (latest created or updated)
+        const recentTasks = [...allTasks]
+            .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt))
+            .slice(0, 5);
+
+        // Fetch recent activities
+        const userTaskIds = allTasks.map((t) => t._id);
+        const recentActivities = await TaskActivity.find({
+            $or: [
+                { actor: req.user._id },
+                { task: { $in: userTaskIds } },
+                { project: { $in: userProjectIds } },
+            ],
+        })
+            .sort({ createdAt: -1 })
+            .limit(10)
+            .populate('actor', '_id name email profileImageURL')
+            .populate('task', '_id title status priority project')
+            .populate('project', '_id name');
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                metrics: {
+                    totalTasks: allTasks.length,
+                    todoCount,
+                    inProgressCount,
+                    completedCount,
+                    dueTodayCount: dueTodayTasks.length,
+                    overdueCount: overdueTasks.length,
+                    completedThisWeek: completedThisWeekCount,
+                    personalCount,
+                    projectCount,
+                    activeProjectsCount: userProjectIds.length,
+                },
+                dueTodayTasks,
+                upcomingTasks: upcomingTasks.slice(0, 8),
+                overdueTasks: overdueTasks.slice(0, 8),
+                recentTasks,
+                recentActivities,
+            },
+        });
+    } catch (err) {
+        console.error('getDashboardSummary error:', err);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to generate dashboard summary',
+            error: err.message,
+        });
+    }
+};
+
 module.exports = {
     createTask,
     getProjectTasks,
@@ -1053,4 +1213,5 @@ module.exports = {
     deleteSubtask,
     createPersonalTask,
     getPersonalTasks,
+    getDashboardSummary,
 };
