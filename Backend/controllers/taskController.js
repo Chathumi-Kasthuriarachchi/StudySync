@@ -4,6 +4,7 @@ const Project = require("../models/Project");
 const ProjectMembership = require("../models/ProjectMembership");
 const TaskActivity = require("../models/TaskActivity");
 const { logTaskActivity } = require("../utils/activityLogger");
+const taskIntelligenceService = require("../services/taskIntelligenceService");
 
 /**
  * createTask
@@ -1167,6 +1168,14 @@ const getDashboardSummary = async (req, res) => {
             .populate('task', '_id title status priority project')
             .populate('project', '_id name');
 
+        // Fetch top recommended tasks via Task Intelligence Engine
+        let recommendedTasks = [];
+        try {
+            recommendedTasks = await taskIntelligenceService.getRecommendedTasksForUser(req.user._id, { limit: 4 });
+        } catch (intelErr) {
+            console.error('Task intelligence calculation in dashboard error:', intelErr);
+        }
+
         return res.status(200).json({
             success: true,
             data: {
@@ -1187,6 +1196,7 @@ const getDashboardSummary = async (req, res) => {
                 overdueTasks: overdueTasks.slice(0, 8),
                 recentTasks,
                 recentActivities,
+                recommendedTasks,
             },
         });
     } catch (err) {
@@ -1194,6 +1204,36 @@ const getDashboardSummary = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: 'Failed to generate dashboard summary',
+            error: err.message,
+        });
+    }
+};
+
+/**
+ * getRecommendedTasks
+ * GET /api/tasks/recommended
+ *
+ * Returns the authenticated user's highest-ranked actionable tasks
+ * based on rule-based urgency scoring and deadline classification.
+ */
+const getRecommendedTasks = async (req, res) => {
+    try {
+        const { limit } = req.query;
+        const recommendations = await taskIntelligenceService.getRecommendedTasksForUser(
+            req.user._id,
+            { limit }
+        );
+
+        return res.status(200).json({
+            success: true,
+            count: recommendations.length,
+            data: recommendations,
+        });
+    } catch (err) {
+        console.error("getRecommendedTasks error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch recommended tasks",
             error: err.message,
         });
     }
@@ -1214,4 +1254,5 @@ module.exports = {
     createPersonalTask,
     getPersonalTasks,
     getDashboardSummary,
+    getRecommendedTasks,
 };

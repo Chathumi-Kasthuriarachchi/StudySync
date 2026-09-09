@@ -16,6 +16,7 @@ const {
     createPersonalTask,
     getPersonalTasks,
     getDashboardSummary,
+    getRecommendedTasks,
 } = require("../controllers/taskController");
 
 const {
@@ -31,6 +32,7 @@ router.use(protect);
 
 // ── Global User Tasks & Dashboard ─────────────────────────────────────────────
 router.get("/my", getMyTasks);
+router.get("/recommended", getRecommendedTasks);
 router.get("/personal", getPersonalTasks);
 router.post("/personal", createPersonalTask);
 router.get("/dashboard-summary", getDashboardSummary);

@@ -3,6 +3,7 @@ const Project = require("../models/Project");
 const ProjectMembership = require("../models/ProjectMembership");
 const User = require("../models/User");
 const Task = require("../models/Task");
+const { calculateMemberWorkload } = require("../services/taskIntelligenceService");
 
 /**
  * getProjectMembers
@@ -371,7 +372,9 @@ const getProjectWorkload = async (req, res) => {
             const completed = memberTasks.filter((t) => t.status === "COMPLETED").length;
             const inProgress = memberTasks.filter((t) => t.status === "IN_PROGRESS").length;
             const todo = memberTasks.filter((t) => t.status === "TODO").length;
+            const activeAssigned = inProgress + todo;
             const completionPct = totalAssigned > 0 ? Math.round((completed / totalAssigned) * 100) : 0;
+            const workloadMetric = calculateMemberWorkload(activeAssigned);
 
             return {
                 member: {
@@ -385,7 +388,10 @@ const getProjectWorkload = async (req, res) => {
                 completed,
                 inProgress,
                 todo,
+                activeAssigned,
                 completionPct,
+                workloadSignal: workloadMetric.workloadSignal,
+                workloadLabel: workloadMetric.label,
             };
         });
 
