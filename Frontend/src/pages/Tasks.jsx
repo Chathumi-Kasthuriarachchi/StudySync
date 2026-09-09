@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   CheckSquare,
   Search,
@@ -52,13 +52,23 @@ const Tasks = () => {
     return () => clearTimeout(timer);
   }, [toastMessage]);
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const paramDue = searchParams.get('due');
+  const paramStatus = searchParams.get('status');
+
   // Filters & sorting
   const [typeFilter, setTypeFilter] = useState('ALL'); // 'ALL' | 'PERSONAL' | 'PROJECT'
-  const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'TODO' | 'IN_PROGRESS' | 'COMPLETED'
+  const [statusFilter, setStatusFilter] = useState(paramStatus ? paramStatus.toUpperCase() : 'ALL'); // 'ALL' | 'TODO' | 'IN_PROGRESS' | 'COMPLETED'
   const [priorityFilter, setPriorityFilter] = useState('ALL');
   const [projectFilter, setProjectFilter] = useState('ALL');
+  const [dueFilter, setDueFilter] = useState(paramDue ? paramDue.toUpperCase() : 'ALL'); // 'ALL' | 'TODAY' | 'UPCOMING' | 'OVERDUE'
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('dueDate'); // 'dueDate' | 'priority' | 'createdAt'
+
+  useEffect(() => {
+    if (paramDue) setDueFilter(paramDue.toUpperCase());
+    if (paramStatus) setStatusFilter(paramStatus.toUpperCase());
+  }, [paramDue, paramStatus]);
 
   // ── Fetch Assigned & Personal Tasks ─────────────────────────────────────────
   const fetchTasks = useCallback(async () => {
@@ -178,6 +188,28 @@ const Tasks = () => {
             if (task.project) return false;
           } else if (task.project?._id !== projectFilter) {
             return false;
+          }
+        }
+
+        // Due date filter
+        if (dueFilter !== 'ALL') {
+          const now = new Date();
+          now.setHours(0, 0, 0, 0);
+          const end = new Date();
+          end.setHours(23, 59, 59, 999);
+
+          if (dueFilter === 'TODAY') {
+            if (!task.dueDate) return false;
+            const d = new Date(task.dueDate);
+            if (d < now || d > end) return false;
+          } else if (dueFilter === 'OVERDUE') {
+            if (!task.dueDate || task.status === 'COMPLETED') return false;
+            const d = new Date(task.dueDate);
+            if (d >= now) return false;
+          } else if (dueFilter === 'UPCOMING') {
+            if (!task.dueDate || task.status === 'COMPLETED') return false;
+            const d = new Date(task.dueDate);
+            if (d < now) return false;
           }
         }
 
@@ -388,7 +420,7 @@ const Tasks = () => {
         {/* Secondary Filter Controls */}
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-1">
           {/* Search Box */}
-          <div className="sm:col-span-5 relative">
+          <div className="sm:col-span-4 relative">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input
               type="text"
@@ -400,17 +432,17 @@ const Tasks = () => {
           </div>
 
           {/* Project Filter */}
-          <div className="sm:col-span-3">
+          <div className="sm:col-span-2">
             <select
               value={projectFilter}
               onChange={(e) => setProjectFilter(e.target.value)}
-              className="w-full px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 focus:outline-hidden focus:ring-2 focus:ring-powder-500 truncate"
+              className="w-full px-2 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 focus:outline-hidden focus:ring-2 focus:ring-powder-500 truncate"
             >
               <option value="ALL">All Sources</option>
-              <option value="PERSONAL">Only Personal Tasks</option>
+              <option value="PERSONAL">Personal Only</option>
               {uniqueProjects.map((p) => (
                 <option key={p.id} value={p.id}>
-                  Project: {p.name}
+                  {p.name}
                 </option>
               ))}
             </select>
@@ -421,7 +453,7 @@ const Tasks = () => {
             <select
               value={priorityFilter}
               onChange={(e) => setPriorityFilter(e.target.value)}
-              className="w-full px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 focus:outline-hidden focus:ring-2 focus:ring-powder-500"
+              className="w-full px-2 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 focus:outline-hidden focus:ring-2 focus:ring-powder-500"
             >
               <option value="ALL">All Priorities</option>
               <option value="URGENT">Urgent</option>
@@ -431,12 +463,30 @@ const Tasks = () => {
             </select>
           </div>
 
+          {/* Due Date Dropdown */}
+          <div className="sm:col-span-2">
+            <select
+              value={dueFilter}
+              onChange={(e) => setDueFilter(e.target.value)}
+              className={`w-full px-2 py-1.5 rounded-xl border text-xs focus:outline-hidden focus:ring-2 focus:ring-powder-500 font-medium ${
+                dueFilter !== 'ALL'
+                  ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 border-amber-300 dark:border-amber-700'
+                  : 'bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+              }`}
+            >
+              <option value="ALL">All Deadlines</option>
+              <option value="TODAY">Due Today 📅</option>
+              <option value="UPCOMING">Upcoming</option>
+              <option value="OVERDUE">Overdue ⚠️</option>
+            </select>
+          </div>
+
           {/* Sort By Dropdown */}
           <div className="sm:col-span-2">
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="w-full px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 focus:outline-hidden focus:ring-2 focus:ring-powder-500"
+              className="w-full px-2 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 focus:outline-hidden focus:ring-2 focus:ring-powder-500"
             >
               <option value="dueDate">Due Date</option>
               <option value="priority">Priority</option>

@@ -32,6 +32,11 @@ export const createPersonalTask = async (taskData) => {
   return res.data;
 };
 
+export const getDashboardSummary = async () => {
+  const res = await api.get('/api/tasks/dashboard-summary');
+  return res.data;
+};
+
 // ── Single Task CRUD ──────────────────────────────────────────────────────────
 export const getTaskById = async (taskId) => {
   const res = await api.get(`/api/tasks/${taskId}`);
