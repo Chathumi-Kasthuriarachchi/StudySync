@@ -13,6 +13,8 @@ const {
     addSubtask,
     toggleSubtask,
     deleteSubtask,
+    createPersonalTask,
+    getPersonalTasks,
 } = require("../controllers/taskController");
 
 // Protect all task routes
@@ -20,6 +22,8 @@ router.use(protect);
 
 // ── Global User Tasks ─────────────────────────────────────────────────────────
 router.get("/my", getMyTasks);
+router.get("/personal", getPersonalTasks);
+router.post("/personal", createPersonalTask);
 
 // ── Task Specific Operations ──────────────────────────────────────────────────
 router.route("/:taskId")

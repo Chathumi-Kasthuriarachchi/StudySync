@@ -22,7 +22,7 @@ const taskSchema = new mongoose.Schema(
         project: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Project",
-            required: [true, "Project reference is required"],
+            default: null,
         },
         title: {
             type: String,
@@ -81,8 +81,21 @@ const taskSchema = new mongoose.Schema(
     },
     {
         timestamps: true,
+        toJSON: { virtuals: true },
+        toObject: { virtuals: true },
     }
 );
+
+// Virtual progress calculation
+taskSchema.virtual("progress").get(function () {
+    if (this.subtasks && this.subtasks.length > 0) {
+        const completed = this.subtasks.filter((st) => st.completed).length;
+        return Math.round((completed / this.subtasks.length) * 100);
+    }
+    if (this.status === "COMPLETED") return 100;
+    if (this.status === "IN_PROGRESS") return 50;
+    return 0;
+});
 
 // Timeline validation: dueDate cannot be before startDate if both exist
 taskSchema.pre("validate", function () {
@@ -100,5 +113,7 @@ taskSchema.index({ project: 1, status: 1 });
 taskSchema.index({ project: 1, dueDate: 1 });
 taskSchema.index({ assignee: 1, status: 1 });
 taskSchema.index({ project: 1, priority: 1 });
+taskSchema.index({ createdBy: 1, project: 1 });
+taskSchema.index({ createdBy: 1, status: 1 });
 
 module.exports = mongoose.model("Task", taskSchema);

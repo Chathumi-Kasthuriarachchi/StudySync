@@ -241,52 +241,62 @@ const getProjectTasks = async (req, res) => {
  */
 const getMyTasks = async (req, res) => {
     try {
-        const { status, priority, projectId, search } = req.query;
+        const { status, priority, projectId, search, type } = req.query;
+        const normalizedType = type ? type.toUpperCase() : 'ALL';
 
-        // 1. Get all projects where the user has active membership
-        const memberships = await ProjectMembership.find({ user: req.user._id }).select(
-            "project role"
-        );
+        const conditions = [];
 
-        if (memberships.length === 0) {
-            return res.status(200).json({
-                success: true,
-                count: 0,
-                data: [],
-            });
+        if (normalizedType === 'PERSONAL') {
+            conditions.push({ project: null, createdBy: req.user._id });
+        } else if (normalizedType === 'PROJECT') {
+            const memberships = await ProjectMembership.find({ user: req.user._id }).select('project');
+            const userProjectIds = memberships.map((m) => m.project);
+
+            if (projectId && mongoose.Types.ObjectId.isValid(projectId)) {
+                conditions.push({ project: projectId, assignee: req.user._id });
+            } else {
+                conditions.push({ project: { $in: userProjectIds }, assignee: req.user._id });
+            }
+        } else {
+            // ALL
+            if (projectId && mongoose.Types.ObjectId.isValid(projectId)) {
+                conditions.push({ project: projectId, assignee: req.user._id });
+            } else {
+                const memberships = await ProjectMembership.find({ user: req.user._id }).select('project');
+                const userProjectIds = memberships.map((m) => m.project);
+                conditions.push({
+                    $or: [
+                        { project: null, createdBy: req.user._id },
+                        { project: { $in: userProjectIds }, assignee: req.user._id },
+                    ],
+                });
+            }
         }
 
-        const userProjectIds = memberships.map((m) => m.project);
-
-        // 2. Build query
-        const filter = {
-            assignee: req.user._id,
-            project: { $in: userProjectIds },
-        };
-
-        if (projectId && mongoose.Types.ObjectId.isValid(projectId)) {
-            filter.project = projectId;
+        if (status && ['TODO', 'IN_PROGRESS', 'COMPLETED'].includes(status.toUpperCase())) {
+            conditions.push({ status: status.toUpperCase() });
         }
 
-        if (status && ["TODO", "IN_PROGRESS", "COMPLETED"].includes(status.toUpperCase())) {
-            filter.status = status.toUpperCase();
-        }
-
-        if (priority && ["LOW", "MEDIUM", "HIGH", "URGENT"].includes(priority.toUpperCase())) {
-            filter.priority = priority.toUpperCase();
+        if (priority && ['LOW', 'MEDIUM', 'HIGH', 'URGENT'].includes(priority.toUpperCase())) {
+            conditions.push({ priority: priority.toUpperCase() });
         }
 
         if (search && search.trim()) {
-            const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-            filter.$or = [
-                { title: new RegExp(escaped, "i") },
-                { description: new RegExp(escaped, "i") },
-            ];
+            const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            conditions.push({
+                $or: [
+                    { title: new RegExp(escaped, 'i') },
+                    { description: new RegExp(escaped, 'i') },
+                ],
+            });
         }
 
-        const tasks = await Task.find(filter)
-            .populate("project", "_id name status dueDate")
-            .populate("createdBy", "_id name email profileImageURL")
+        const query = conditions.length > 0 ? { $and: conditions } : {};
+
+        const tasks = await Task.find(query)
+            .populate('project', '_id name status dueDate')
+            .populate('assignee', '_id name email profileImageURL')
+            .populate('createdBy', '_id name email profileImageURL')
             .sort({ dueDate: 1, createdAt: -1 });
 
         return res.status(200).json({
@@ -295,10 +305,10 @@ const getMyTasks = async (req, res) => {
             data: tasks,
         });
     } catch (err) {
-        console.error("getMyTasks error:", err);
+        console.error('getMyTasks error:', err);
         return res.status(500).json({
             success: false,
-            message: "Failed to get assigned tasks",
+            message: 'Failed to get assigned tasks',
             error: err.message,
         });
     }
@@ -407,25 +417,36 @@ const updateTask = async (req, res) => {
 
         // Assignee update
         if (assignee !== undefined) {
-            if (assignee === null || assignee === "") {
-                task.assignee = null;
-            } else {
-                if (!mongoose.Types.ObjectId.isValid(assignee)) {
-                    return res.status(400).json({ success: false, message: "Invalid assignee user ID" });
-                }
-
-                const isMember = await ProjectMembership.findOne({
-                    project: task.project,
-                    user: assignee,
-                });
-
-                if (!isMember) {
+            if (!task.project) {
+                // Personal task: cannot assign to other users
+                if (assignee !== null && assignee !== "" && assignee.toString() !== req.user._id.toString()) {
                     return res.status(400).json({
                         success: false,
-                        message: "Assignee must be an active member of this project",
+                        message: "Personal tasks cannot be assigned to other users",
                     });
                 }
-                task.assignee = assignee;
+                task.assignee = req.user._id;
+            } else {
+                if (assignee === null || assignee === "") {
+                    task.assignee = null;
+                } else {
+                    if (!mongoose.Types.ObjectId.isValid(assignee)) {
+                        return res.status(400).json({ success: false, message: "Invalid assignee user ID" });
+                    }
+
+                    const isMember = await ProjectMembership.findOne({
+                        project: task.project,
+                        user: assignee,
+                    });
+
+                    if (!isMember) {
+                        return res.status(400).json({
+                            success: false,
+                            message: "Assignee must be an active member of this project",
+                        });
+                    }
+                    task.assignee = assignee;
+                }
             }
         }
 
@@ -586,6 +607,7 @@ const addSubtask = async (req, res) => {
             createdAt: new Date(),
         });
 
+        syncTaskStatusFromSubtasks(task);
         await task.save();
 
         const updated = await Task.findById(task._id)
@@ -636,6 +658,7 @@ const toggleSubtask = async (req, res) => {
             subtask.title = title.trim();
         }
 
+        syncTaskStatusFromSubtasks(task);
         await task.save();
 
         const updated = await Task.findById(task._id)
@@ -677,6 +700,9 @@ const deleteSubtask = async (req, res) => {
         }
 
         task.subtasks.pull(subtaskId);
+        if (task.subtasks.length > 0) {
+            syncTaskStatusFromSubtasks(task);
+        }
         await task.save();
 
         const updated = await Task.findById(task._id)
@@ -698,6 +724,212 @@ const deleteSubtask = async (req, res) => {
     }
 };
 
+/**
+ * Helper to synchronize task status based on subtask completion
+ */
+const syncTaskStatusFromSubtasks = (task) => {
+    if (task.subtasks && task.subtasks.length > 0) {
+        const completedCount = task.subtasks.filter((st) => st.completed).length;
+        if (completedCount === task.subtasks.length) {
+            task.status = 'COMPLETED';
+        } else if (completedCount > 0) {
+            task.status = 'IN_PROGRESS';
+        } else {
+            task.status = 'TODO';
+        }
+    }
+};
+
+/**
+ * createPersonalTask
+ * POST /api/tasks/personal
+ *
+ * Creates a personal task not associated with any project.
+ * Automatically sets project = null, createdBy = req.user._id, assignee = req.user._id.
+ */
+const createPersonalTask = async (req, res) => {
+    try {
+        const {
+            title,
+            description,
+            status,
+            priority,
+            startDate,
+            dueDate,
+            tags,
+            subtasks,
+        } = req.body;
+
+        if (!title || title.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Task title is required',
+            });
+        }
+
+        let start = null;
+        let due = null;
+        if (startDate) {
+            start = new Date(startDate);
+            if (isNaN(start.getTime())) {
+                return res.status(400).json({ success: false, message: 'Invalid start date format' });
+            }
+        }
+        if (dueDate) {
+            due = new Date(dueDate);
+            if (isNaN(due.getTime())) {
+                return res.status(400).json({ success: false, message: 'Invalid due date format' });
+            }
+        }
+        if (start && due && due < start) {
+            return res.status(400).json({
+                success: false,
+                message: 'Due date cannot be earlier than start date',
+            });
+        }
+
+        const formattedSubtasks = Array.isArray(subtasks)
+            ? subtasks
+                  .filter((st) => st && st.title && st.title.trim().length > 0)
+                  .map((st) => ({
+                      title: st.title.trim(),
+                      completed: Boolean(st.completed),
+                      createdAt: new Date(),
+                  }))
+            : [];
+
+        const formattedTags = Array.isArray(tags)
+            ? tags.map((t) => String(t).trim()).filter(Boolean)
+            : [];
+
+        const task = new Task({
+            project: null,
+            title: title.trim(),
+            description: description ? description.trim() : '',
+            status: status || 'TODO',
+            priority: priority || 'MEDIUM',
+            assignee: req.user._id,
+            createdBy: req.user._id,
+            startDate: start,
+            dueDate: due,
+            tags: formattedTags,
+            subtasks: formattedSubtasks,
+        });
+
+        if (task.subtasks.length > 0 && !status) {
+            syncTaskStatusFromSubtasks(task);
+        }
+
+        await task.save();
+
+        const populatedTask = await Task.findById(task._id)
+            .populate('assignee', '_id name email profileImageURL')
+            .populate('createdBy', '_id name email profileImageURL');
+
+        return res.status(201).json({
+            success: true,
+            message: 'Personal task created successfully',
+            data: populatedTask,
+        });
+    } catch (err) {
+        console.error('createPersonalTask error:', err);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to create personal task',
+            error: err.message,
+        });
+    }
+};
+
+/**
+ * getPersonalTasks
+ * GET /api/tasks/personal
+ *
+ * Returns all personal tasks belonging to the authenticated user.
+ */
+const getPersonalTasks = async (req, res) => {
+    try {
+        const { status, priority, tag, search, sortBy, order } = req.query;
+
+        const filter = {
+            project: null,
+            createdBy: req.user._id,
+        };
+
+        if (status && ['TODO', 'IN_PROGRESS', 'COMPLETED'].includes(status.toUpperCase())) {
+            filter.status = status.toUpperCase();
+        }
+
+        if (priority && ['LOW', 'MEDIUM', 'HIGH', 'URGENT'].includes(priority.toUpperCase())) {
+            filter.priority = priority.toUpperCase();
+        }
+
+        if (tag && tag.trim()) {
+            filter.tags = tag.trim();
+        }
+
+        if (search && search.trim()) {
+            const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            filter.$or = [
+                { title: new RegExp(escaped, 'i') },
+                { description: new RegExp(escaped, 'i') },
+            ];
+        }
+
+        const sortField = ['dueDate', 'priority', 'createdAt'].includes(sortBy)
+            ? sortBy
+            : 'createdAt';
+        const sortDirection = order === 'asc' ? 1 : -1;
+        const sortOptions = { [sortField]: sortDirection };
+
+        if (sortField === 'dueDate') {
+            sortOptions.dueDate = sortDirection;
+        }
+
+        const tasks = await Task.find(filter)
+            .populate('assignee', '_id name email profileImageURL')
+            .populate('createdBy', '_id name email profileImageURL')
+            .sort(sortOptions);
+
+        const allPersonalTasks = await Task.find({ project: null, createdBy: req.user._id }).select(
+            'status subtasks'
+        );
+
+        const totalTasks = allPersonalTasks.length;
+        const completedTasks = allPersonalTasks.filter((t) => t.status === 'COMPLETED').length;
+        const completionPct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+        let subtasksTotal = 0;
+        let subtasksCompleted = 0;
+        allPersonalTasks.forEach((t) => {
+            if (Array.isArray(t.subtasks)) {
+                subtasksTotal += t.subtasks.length;
+                subtasksCompleted += t.subtasks.filter((st) => st.completed).length;
+            }
+        });
+
+        return res.status(200).json({
+            success: true,
+            count: tasks.length,
+            stats: {
+                totalTasks,
+                completedTasks,
+                completionPct,
+                subtasksTotal,
+                subtasksCompleted,
+            },
+            data: tasks,
+        });
+    } catch (err) {
+        console.error('getPersonalTasks error:', err);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve personal tasks',
+            error: err.message,
+        });
+    }
+};
+
 module.exports = {
     createTask,
     getProjectTasks,
@@ -709,4 +941,6 @@ module.exports = {
     addSubtask,
     toggleSubtask,
     deleteSubtask,
+    createPersonalTask,
+    getPersonalTasks,
 };

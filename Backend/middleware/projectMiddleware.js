@@ -115,6 +115,21 @@ const requireTaskAccess = async (req, res, next) => {
             });
         }
 
+        // Context 1: Personal Task (project is null)
+        if (!task.project) {
+            if (!task.createdBy.equals(req.user._id)) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Access denied. You do not have permission to access this personal task.",
+                });
+            }
+            req.task = task;
+            req.project = null;
+            req.membership = { role: "OWNER" }; // Creator has full owner permissions over personal tasks
+            return next();
+        }
+
+        // Context 2: Project-scoped Task
         const membership = await ProjectMembership.findOne({
             project: task.project,
             user: req.user._id,
