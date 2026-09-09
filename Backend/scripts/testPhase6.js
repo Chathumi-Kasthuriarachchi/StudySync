@@ -292,33 +292,60 @@ async function runPhase6Tests() {
         }
         console.log("✓ Task status updated to IN_PROGRESS (project populated intact)");
 
-        // 6b. Manually setting status to COMPLETED should mark all subtasks completed
-        const reqStatusComplete = {
+        // 6b. Manually setting status to COMPLETED should be BLOCKED while subtasks are incomplete
+        const reqStatusCompleteBlocked = {
             task: await Task.findById(createdTask._id),
             membership: { role: "MEMBER" },
             user: users.member,
             body: { status: "COMPLETED" },
         };
-        const resStatusComplete = createMockRes();
-        await updateTaskStatus(reqStatusComplete, resStatusComplete);
-        const updatedCompleteTask = resStatusComplete.responseData.data;
-
-        if (updatedCompleteTask.status !== "COMPLETED") {
-            throw new Error("Manual status update to COMPLETED failed");
+        const resStatusCompleteBlocked = createMockRes();
+        await updateTaskStatus(reqStatusCompleteBlocked, resStatusCompleteBlocked);
+        if (resStatusCompleteBlocked.statusCode !== 400) {
+            throw new Error(`Expected 400 Bad Request when setting COMPLETED with incomplete subtasks, got ${resStatusCompleteBlocked.statusCode}`);
         }
-        const allDone = updatedCompleteTask.subtasks.every((st) => st.completed);
-        if (!allDone || updatedCompleteTask.progress !== 100) {
-            throw new Error(`Expected all subtasks completed & 100% progress, got progress=${updatedCompleteTask.progress}%`);
-        }
-        console.log("✓ Manual COMPLETED marks all subtasks completed (Progress = 100%)");
+        console.log("✓ Correctly prevented marking task COMPLETED while subtasks are incomplete (400 Bad Request)");
 
-        // 6c. Reopening a subtask automatically sets status back to IN_PROGRESS
-        const subtaskToReopen = updatedCompleteTask.subtasks[0];
+        // 6c. Test editing subtask title
+        const subtaskToEdit = createdTask.subtasks[0];
+        const reqEditSubtask = {
+            task: await Task.findById(createdTask._id),
+            membership: { role: "MEMBER" },
+            user: users.member,
+            params: { taskId: createdTask._id, subtaskId: subtaskToEdit._id },
+            body: { title: "Refactored schema models and indexes" },
+        };
+        const resEditSubtask = createMockRes();
+        await toggleSubtask(reqEditSubtask, resEditSubtask);
+        if (resEditSubtask.statusCode !== 200 || !resEditSubtask.responseData.data.subtasks.some((st) => st.title === "Refactored schema models and indexes")) {
+            throw new Error("Editing subtask title failed");
+        }
+        console.log("✓ Successfully edited subtask title");
+
+        // 6d. Complete all subtasks -> task transitions to COMPLETED
+        for (const st of createdTask.subtasks) {
+            const reqToggle = {
+                task: await Task.findById(createdTask._id),
+                membership: { role: "MEMBER" },
+                user: users.member,
+                params: { taskId: createdTask._id, subtaskId: st._id },
+                body: { completed: true },
+            };
+            const resToggle = createMockRes();
+            await toggleSubtask(reqToggle, resToggle);
+        }
+        const fullyCompletedTask = await Task.findById(createdTask._id);
+        if (fullyCompletedTask.status !== "COMPLETED" || fullyCompletedTask.progress !== 100) {
+            throw new Error(`Expected status COMPLETED and 100% progress, got status=${fullyCompletedTask.status}, progress=${fullyCompletedTask.progress}%`);
+        }
+        console.log("✓ Completing all subtasks transitions task to COMPLETED (Progress = 100%)");
+
+        // 6e. Reopening a subtask automatically sets status back to IN_PROGRESS
         const reqReopenSubtask = {
             task: await Task.findById(createdTask._id),
             membership: { role: "MEMBER" },
             user: users.member,
-            params: { taskId: createdTask._id, subtaskId: subtaskToReopen._id },
+            params: { taskId: createdTask._id, subtaskId: subtaskToEdit._id },
             body: { completed: false },
         };
         const resReopenSubtask = createMockRes();

@@ -250,7 +250,7 @@ async function runPhase5Tests() {
         }
         console.log(`✓ Added Subtask 3 -> Task auto-transitioned back to IN_PROGRESS`);
 
-        // 7d. Manual status override takes precedence
+        // 7d. Manual status to COMPLETED is blocked while subtask 3 is incomplete
         const reqManualStatus = {
             user: userA,
             task: await Task.findById(createdTask._id),
@@ -258,10 +258,25 @@ async function runPhase5Tests() {
         };
         const resManualStatus = createMockRes();
         await updateTaskStatus(reqManualStatus, resManualStatus);
-        if (resManualStatus.responseData.data.status !== "COMPLETED") {
-            throw new Error(`Manual status override failed`);
+        if (resManualStatus.statusCode !== 400) {
+            throw new Error(`Expected 400 Bad Request when setting COMPLETED with incomplete subtasks, got ${resManualStatus.statusCode}`);
         }
-        console.log(`✓ Manual status update to COMPLETED verified\n`);
+        console.log(`✓ Manual status update to COMPLETED blocked while subtasks are incomplete (400 Bad Request)`);
+
+        // 7e. Toggle subtask 3 to complete -> auto transitions to COMPLETED
+        const subtask3 = resAddSubtask.responseData.data.subtasks.find(s => s.title === "Draft summary cheat sheet");
+        const reqToggle3 = {
+            user: userA,
+            task: await Task.findById(createdTask._id),
+            params: { taskId: createdTask._id, subtaskId: subtask3._id },
+            body: { completed: true },
+        };
+        const resToggle3 = createMockRes();
+        await toggleSubtask(reqToggle3, resToggle3);
+        if (resToggle3.responseData.data.status !== "COMPLETED") {
+            throw new Error(`Expected status COMPLETED after completing all subtasks, got ${resToggle3.responseData.data.status}`);
+        }
+        console.log(`✓ All subtasks completed -> Task auto-transitioned to COMPLETED\n`);
 
         // 8. Test getMyTasks with Personal and All Types
         console.log("▶ Step 8: Testing getMyTasks Query Branching...");

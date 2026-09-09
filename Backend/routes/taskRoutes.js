@@ -43,8 +43,10 @@ router.patch("/:taskId/status", requireTaskAccess, updateTaskStatus);
 
 // ── Subtasks Operations ───────────────────────────────────────────────────────
 router.post("/:taskId/subtasks", requireTaskAccess, addSubtask);
-router.patch("/:taskId/subtasks/:subtaskId", requireTaskAccess, toggleSubtask);
-router.delete("/:taskId/subtasks/:subtaskId", requireTaskAccess, deleteSubtask);
+router.route("/:taskId/subtasks/:subtaskId")
+    .patch(requireTaskAccess, toggleSubtask)
+    .put(requireTaskAccess, toggleSubtask)
+    .delete(requireTaskAccess, deleteSubtask);
 
 // ── Comments Operations ───────────────────────────────────────────────────────
 router.route("/:taskId/comments")

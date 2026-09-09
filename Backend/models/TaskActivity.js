@@ -29,6 +29,8 @@ const taskActivitySchema = new mongoose.Schema(
                 "ASSIGNED",
                 "SUBTASK_TOGGLED",
                 "SUBTASK_ADDED",
+                "SUBTASK_UPDATED",
+                "SUBTASK_DELETED",
                 "COMMENT_ADDED",
                 "UPDATED",
             ],

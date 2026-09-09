@@ -412,10 +412,25 @@ const updateTask = async (req, res) => {
         }
 
         if (status !== undefined) {
-            if (!["TODO", "IN_PROGRESS", "COMPLETED"].includes(status.toUpperCase())) {
+            const nextStatus = status.toUpperCase();
+            if (!["TODO", "IN_PROGRESS", "COMPLETED"].includes(nextStatus)) {
                 return res.status(400).json({ success: false, message: "Invalid status value" });
             }
-            task.status = status.toUpperCase();
+            if (nextStatus === "COMPLETED" && task.subtasks && task.subtasks.length > 0) {
+                const hasIncompleteSubtasks = task.subtasks.some((st) => !st.completed);
+                if (hasIncompleteSubtasks) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Cannot mark task as completed until all subtasks are completed",
+                    });
+                }
+            }
+            if (nextStatus === "TODO" && task.subtasks && task.subtasks.length > 0) {
+                task.subtasks.forEach((st) => {
+                    st.completed = false;
+                });
+            }
+            task.status = nextStatus;
         }
 
         if (priority !== undefined) {
@@ -536,20 +551,26 @@ const updateTaskStatus = async (req, res) => {
 
         const prevStatus = task.status;
         const newStatus = status.toUpperCase();
-        task.status = newStatus;
 
-        // Predictable subtask synchronization:
-        if (task.subtasks && task.subtasks.length > 0) {
-            if (newStatus === "COMPLETED") {
-                task.subtasks.forEach((st) => {
-                    st.completed = true;
-                });
-            } else if (newStatus === "TODO") {
-                task.subtasks.forEach((st) => {
-                    st.completed = false;
+        // Subtask completion guard: Cannot mark task as COMPLETED if any subtasks are incomplete
+        if (newStatus === "COMPLETED" && task.subtasks && task.subtasks.length > 0) {
+            const hasIncompleteSubtasks = task.subtasks.some((st) => !st.completed);
+            if (hasIncompleteSubtasks) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Cannot mark task as completed until all subtasks are completed",
                 });
             }
         }
+
+        // When setting to TODO, reset all subtasks to incomplete
+        if (newStatus === "TODO" && task.subtasks && task.subtasks.length > 0) {
+            task.subtasks.forEach((st) => {
+                st.completed = false;
+            });
+        }
+
+        task.status = newStatus;
 
         await task.save();
 
@@ -704,12 +725,22 @@ const toggleSubtask = async (req, res) => {
             return res.status(404).json({ success: false, message: "Subtask not found" });
         }
 
-        if (completed !== undefined) {
-            subtask.completed = Boolean(completed);
+        let activityAction = "SUBTASK_TOGGLED";
+        let activityDetails = "";
+
+        if (title !== undefined) {
+            if (!title || title.trim().length === 0) {
+                return res.status(400).json({ success: false, message: "Subtask title cannot be empty" });
+            }
+            subtask.title = title.trim();
+            activityAction = "SUBTASK_UPDATED";
+            activityDetails = `${req.user.name || "A member"} updated subtask title to "${subtask.title}"`;
         }
 
-        if (title !== undefined && title.trim().length > 0) {
-            subtask.title = title.trim();
+        if (completed !== undefined) {
+            subtask.completed = Boolean(completed);
+            activityAction = "SUBTASK_TOGGLED";
+            activityDetails = `${req.user.name || "A member"} marked subtask "${subtask.title}" as ${subtask.completed ? "completed" : "incomplete"}`;
         }
 
         syncTaskStatusFromSubtasks(task);
@@ -720,18 +751,20 @@ const toggleSubtask = async (req, res) => {
             .populate("assignee", "_id name email profileImageURL")
             .populate("createdBy", "_id name email profileImageURL");
 
-        await logTaskActivity({
-            task: task._id,
-            project: task.project || null,
-            actor: req.user._id,
-            action: "SUBTASK_TOGGLED",
-            details: `${req.user.name || "A member"} marked subtask "${subtask.title}" as ${subtask.completed ? "completed" : "incomplete"}`,
-            metadata: { subtaskId: subtask._id, completed: subtask.completed },
-        });
+        if (activityDetails) {
+            await logTaskActivity({
+                task: task._id,
+                project: task.project || null,
+                actor: req.user._id,
+                action: activityAction,
+                details: activityDetails,
+                metadata: { subtaskId: subtask._id, completed: subtask.completed },
+            });
+        }
 
         return res.status(200).json({
             success: true,
-            message: "Subtask updated",
+            message: "Subtask updated successfully",
             data: updated,
         });
     } catch (err) {
@@ -763,6 +796,7 @@ const deleteSubtask = async (req, res) => {
             return res.status(404).json({ success: false, message: "Subtask not found" });
         }
 
+        const deletedTitle = subtask.title;
         task.subtasks.pull(subtaskId);
         if (task.subtasks.length > 0) {
             syncTaskStatusFromSubtasks(task);
@@ -773,6 +807,14 @@ const deleteSubtask = async (req, res) => {
             .populate("project", "_id name status dueDate owner")
             .populate("assignee", "_id name email profileImageURL")
             .populate("createdBy", "_id name email profileImageURL");
+
+        await logTaskActivity({
+            task: task._id,
+            project: task.project || null,
+            actor: req.user._id,
+            action: "SUBTASK_DELETED",
+            details: `${req.user.name || "A member"} deleted subtask "${deletedTitle}"`,
+        });
 
         return res.status(200).json({
             success: true,
@@ -800,7 +842,9 @@ const syncTaskStatusFromSubtasks = (task) => {
         } else if (completedCount > 0) {
             task.status = 'IN_PROGRESS';
         } else {
-            task.status = 'TODO';
+            if (task.status === 'COMPLETED') {
+                task.status = 'TODO';
+            }
         }
     }
 };
@@ -1005,6 +1049,7 @@ module.exports = {
     deleteTask,
     addSubtask,
     toggleSubtask,
+    updateSubtask: toggleSubtask,
     deleteSubtask,
     createPersonalTask,
     getPersonalTasks,
