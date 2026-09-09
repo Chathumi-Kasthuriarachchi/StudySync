@@ -21,6 +21,7 @@ import { useAuth } from '../context/AuthContext';
 import { getDashboardSummary, updateTaskStatus } from '../services/taskService';
 import CreateTaskModal from '../components/tasks/CreateTaskModal';
 import TaskDetailsModal from '../components/tasks/TaskDetailsModal';
+import MiniCalendar from '../components/calendar/MiniCalendar';
 
 /**
  * Priority badge styling helper
@@ -880,6 +881,9 @@ const Dashboard = () => {
 
         {/* Right 1 Column: Quick Actions & Account Info */}
         <div className="space-y-6">
+          {/* Mini Calendar Widget */}
+          <MiniCalendar />
+
           {/* Quick Actions Panel */}
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs">
             <h2 className="text-base font-bold text-slate-900 dark:text-white mb-3">
