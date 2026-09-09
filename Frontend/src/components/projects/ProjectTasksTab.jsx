@@ -17,6 +17,7 @@ import {
   ChevronRight,
   TrendingUp,
   RefreshCw,
+  X,
 } from 'lucide-react';
 import { getProjectTasks, updateTaskStatus } from '../../services/taskService';
 import CreateTaskModal from '../tasks/CreateTaskModal';
@@ -29,12 +30,26 @@ import TaskProgressBar from '../tasks/TaskProgressBar';
 const ProjectTasksTab = ({ projectId, projectRole, members = [] }) => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [fetchError, setFetchError] = useState('');
+  const [toastMessage, setToastMessage] = useState(null);
 
   // Modals state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+
+  // Auto-dismiss warning message after 5 seconds
+  const showToast = (msg) => {
+    setToastMessage(msg);
+  };
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timer = setTimeout(() => {
+      setToastMessage(null);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [toastMessage]);
 
   // Filters & sorting state
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'TODO' | 'IN_PROGRESS' | 'COMPLETED'
@@ -50,13 +65,13 @@ const ProjectTasksTab = ({ projectId, projectRole, members = [] }) => {
     if (!projectId) return;
     try {
       setLoading(true);
-      setError('');
+      setFetchError('');
       const res = await getProjectTasks(projectId);
       if (res.success) {
         setTasks(res.data || []);
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load project tasks');
+      setFetchError(err.response?.data?.message || 'Failed to load project tasks');
     } finally {
       setLoading(false);
     }
@@ -79,7 +94,7 @@ const ProjectTasksTab = ({ projectId, projectRole, members = [] }) => {
 
     // Subtask completion guard
     if (nextStatus === 'COMPLETED' && task.subtasks?.length > 0 && task.subtasks.some((s) => !s.completed)) {
-      setError(`Cannot mark "${task.title}" as completed: all subtasks must be completed first.`);
+      showToast(`Cannot mark "${task.title}" as completed: all subtasks must be completed first.`);
       return;
     }
 
@@ -95,10 +110,9 @@ const ProjectTasksTab = ({ projectId, projectRole, members = [] }) => {
         setTasks((prev) =>
           prev.map((t) => (t._id === task._id ? res.data : t))
         );
-        setError('');
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to update task status');
+      showToast(err.response?.data?.message || 'Failed to update task status');
       fetchTasks();
     }
   };
@@ -205,17 +219,18 @@ const ProjectTasksTab = ({ projectId, projectRole, members = [] }) => {
 
   return (
     <div className="space-y-6 animate-fadeIn">
-      {/* ── Error Banner ────────────────────────────────────────────────────── */}
-      {error && (
-        <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 flex items-center justify-between gap-3 text-rose-700 dark:text-rose-300 text-xs shadow-2xs">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span className="font-semibold">{error}</span>
+      {/* ── Top Warning Card (Auto-dismissing after 5s or close) ───────────── */}
+      {toastMessage && (
+        <div className="p-3.5 rounded-2xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/90 dark:border-amber-900/60 flex items-center justify-between gap-3 text-amber-800 dark:text-amber-200 text-xs shadow-2xs animate-fadeIn">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span className="font-semibold">{toastMessage}</span>
           </div>
           <button
             type="button"
-            onClick={() => setError('')}
-            className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-200 font-bold px-1"
+            onClick={() => setToastMessage(null)}
+            className="text-amber-600 hover:text-amber-800 dark:hover:text-amber-100 font-bold px-1.5 py-0.5 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/40 transition"
+            title="Dismiss"
           >
             ✕
           </button>
@@ -379,11 +394,11 @@ const ProjectTasksTab = ({ projectId, projectRole, members = [] }) => {
             />
           ))}
         </div>
-      ) : error ? (
+      ) : fetchError ? (
         <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-2xl p-6 text-center">
           <AlertCircle className="w-8 h-8 text-rose-500 mx-auto mb-2" />
           <p className="text-xs font-semibold text-rose-700 dark:text-rose-300">
-            {error}
+            {fetchError}
           </p>
           <button
             type="button"

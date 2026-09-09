@@ -163,6 +163,13 @@ const TaskDetailsModal = ({
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
+  // Auto-dismiss warning after 5 seconds
+  useEffect(() => {
+    if (!error) return;
+    const timer = setTimeout(() => setError(''), 5000);
+    return () => clearTimeout(timer);
+  }, [error]);
+
   // Collaboration states (Comments & Activity)
   const [comments, setComments] = useState([]);
   const [activities, setActivities] = useState([]);
@@ -542,9 +549,19 @@ const TaskDetailsModal = ({
 
         {/* Alerts */}
         {error && (
-          <div className="mx-6 mt-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 flex items-center gap-2 text-rose-700 dark:text-rose-300 text-xs shrink-0">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{error}</span>
+          <div className="mx-6 mt-4 p-3.5 rounded-2xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/90 dark:border-amber-900/60 flex items-center justify-between gap-3 text-amber-800 dark:text-amber-200 text-xs shrink-0 shadow-2xs animate-fadeIn">
+            <div className="flex items-center gap-2.5">
+              <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span className="font-semibold">{error}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setError('')}
+              className="text-amber-600 hover:text-amber-800 dark:hover:text-amber-100 font-bold px-1.5 py-0.5 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/40 transition"
+              title="Dismiss"
+            >
+              ✕
+            </button>
           </div>
         )}
 
