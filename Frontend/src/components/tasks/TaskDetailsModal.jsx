@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   X,
   Calendar,
@@ -17,6 +17,9 @@ import {
   CheckSquare,
   Sparkles,
   FolderKanban,
+  MessageSquare,
+  Send,
+  History,
 } from 'lucide-react';
 import {
   updateTask,
@@ -26,7 +29,16 @@ import {
   toggleSubtask,
   deleteSubtask,
 } from '../../services/taskService';
+import {
+  getTaskComments,
+  createTaskComment,
+  updateTaskComment,
+  deleteTaskComment,
+  getTaskActivities,
+} from '../../services/commentService';
+import { getProjectMembers } from '../../services/projectService';
 import { useAuth } from '../../context/AuthContext';
+import { getRoleBadge } from '../../pages/Projects';
 import TaskProgressBar from './TaskProgressBar';
 
 /**
@@ -108,6 +120,22 @@ const TaskDetailsModal = ({
   const { user: currentUser } = useAuth();
   const [task, setTask] = useState(initialTask);
   const [isEditing, setIsEditing] = useState(false);
+  const [internalMembers, setInternalMembers] = useState(members);
+
+  useEffect(() => {
+    setInternalMembers(members);
+  }, [members]);
+
+  useEffect(() => {
+    if (task?.project && (!members || members.length === 0)) {
+      const pId = task.project._id || task.project;
+      getProjectMembers(pId)
+        .then((res) => {
+          if (res.success) setInternalMembers(res.data || []);
+        })
+        .catch(() => {});
+    }
+  }, [task?.project, members]);
 
   // Edit form states
   const [editTitle, setEditTitle] = useState('');
@@ -127,6 +155,36 @@ const TaskDetailsModal = ({
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
+  // Collaboration states (Comments & Activity)
+  const [comments, setComments] = useState([]);
+  const [activities, setActivities] = useState([]);
+  const [activeCollabTab, setActiveCollabTab] = useState('comments');
+  const [commentContent, setCommentContent] = useState('');
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editingCommentText, setEditingCommentText] = useState('');
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
+
+  const fetchCollaborationData = useCallback(async (taskId) => {
+    if (!taskId) return;
+    try {
+      setCommentsLoading(true);
+      setActivitiesLoading(true);
+      const [comRes, actRes] = await Promise.all([
+        getTaskComments(taskId).catch(() => ({ data: [] })),
+        getTaskActivities(taskId).catch(() => ({ data: [] })),
+      ]);
+      if (comRes.success) setComments(comRes.data || []);
+      if (actRes.success) setActivities(actRes.data || []);
+    } catch (err) {
+      console.error('Failed to load comments/activities:', err);
+    } finally {
+      setCommentsLoading(false);
+      setActivitiesLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (initialTask) {
       setTask(initialTask);
@@ -139,8 +197,15 @@ const TaskDetailsModal = ({
       setEditTags(Array.isArray(initialTask.tags) ? initialTask.tags.join(', ') : '');
       setIsEditing(false);
       setError('');
+
+      if (initialTask.project) {
+        fetchCollaborationData(initialTask._id);
+      } else {
+        setComments([]);
+        setActivities([]);
+      }
     }
-  }, [initialTask]);
+  }, [initialTask, fetchCollaborationData]);
 
   if (!isOpen || !task) return null;
 
@@ -221,6 +286,58 @@ const TaskDetailsModal = ({
     }
   };
 
+  // ── Comment Handlers ────────────────────────────────────────────────────────
+  const handleAddComment = async (e) => {
+    e.preventDefault();
+    if (!commentContent.trim() || isViewer) return;
+
+    try {
+      setSubmittingComment(true);
+      const res = await createTaskComment(task._id, commentContent.trim());
+      if (res.success && res.data) {
+        setComments((prev) => [...prev, res.data]);
+        setCommentContent('');
+        getTaskActivities(task._id).then((actRes) => {
+          if (actRes.success) setActivities(actRes.data || []);
+        });
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to post comment');
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
+
+  const handleUpdateComment = async (commentId) => {
+    if (!editingCommentText.trim()) return;
+
+    try {
+      const res = await updateTaskComment(task._id, commentId, editingCommentText.trim());
+      if (res.success && res.data) {
+        setComments((prev) =>
+          prev.map((c) => (c._id === commentId ? res.data : c))
+        );
+        setEditingCommentId(null);
+        setEditingCommentText('');
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update comment');
+    }
+  };
+
+  const handleDeleteComment = async (commentId) => {
+    if (!window.confirm('Are you sure you want to delete this comment?')) return;
+
+    try {
+      const res = await deleteTaskComment(task._id, commentId);
+      if (res.success) {
+        setComments((prev) => prev.filter((c) => c._id !== commentId));
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to delete comment');
+    }
+  };
+
   // ── Save Full Edit ──────────────────────────────────────────────────────────
   const handleSaveEdit = async (e) => {
     e.preventDefault();
@@ -293,6 +410,16 @@ const TaskDetailsModal = ({
 
   const priorityBadge = getPriorityBadge(task.priority);
   const statusBadge = getTaskStatusBadge(task.status);
+
+  // Assignee project role badge
+  const assigneeMembership = !isPersonal && internalMembers?.length > 0 && task.assignee
+    ? internalMembers.find((m) => {
+        const mUserId = m.user?._id || m.user;
+        const taskAssigneeId = task.assignee?._id || task.assignee;
+        return mUserId && taskAssigneeId && mUserId.toString() === taskAssigneeId.toString();
+      })
+    : null;
+  const assigneeRoleBadge = assigneeMembership ? getRoleBadge(assigneeMembership.role) : null;
 
   // Subtask completion metric
   const subtasksList = Array.isArray(task.subtasks) ? task.subtasks : [];
@@ -549,7 +676,7 @@ const TaskDetailsModal = ({
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
                     <User className="w-3 h-3 text-mint-500" /> Assignee
                   </span>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <div className="w-6 h-6 rounded-full bg-mint-100 dark:bg-mint-950/60 text-mint-700 dark:text-mint-300 font-bold flex items-center justify-center text-[10px]">
                       {isPersonal
                         ? 'Me'
@@ -560,6 +687,11 @@ const TaskDetailsModal = ({
                     <span className="font-semibold text-slate-800 dark:text-slate-200">
                       {isPersonal ? 'Self (Personal Task)' : task.assignee?.name || 'Unassigned'}
                     </span>
+                    {assigneeRoleBadge && (
+                      <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${assigneeRoleBadge.bg}`}>
+                        {assigneeRoleBadge.label}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -584,10 +716,22 @@ const TaskDetailsModal = ({
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                     Created By
                   </span>
-                  <p className="text-slate-600 dark:text-slate-400">
-                    {task.createdBy?.name || 'Teammate'}
+                  <p className="font-semibold text-slate-800 dark:text-slate-200">
+                    {isPersonal ? 'Self' : task.createdBy?.name || 'Teammate'}
                   </p>
                 </div>
+
+                {/* Project Context */}
+                {!isPersonal && task.project && (
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                      <FolderKanban className="w-3 h-3 text-indigo-500" /> Project
+                    </span>
+                    <p className="font-semibold text-slate-800 dark:text-slate-200 truncate">
+                      {task.project.name || 'Project'}
+                    </p>
+                  </div>
+                )}
 
                 {/* Tags */}
                 {task.tags && task.tags.length > 0 && (
@@ -696,6 +840,201 @@ const TaskDetailsModal = ({
                   </form>
                 )}
               </div>
+
+              {/* ── Collaboration Section (Comments & Activity) ── Only for Project Tasks */}
+              {!isPersonal && (
+                <div className="pt-4 border-t border-slate-200/80 dark:border-slate-800 space-y-4">
+                  {/* Tab switcher */}
+                  <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveCollabTab('comments')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                        activeCollabTab === 'comments'
+                          ? 'bg-powder-50 dark:bg-powder-950/60 text-powder-600 dark:text-powder-300'
+                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>Comments ({comments.length})</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveCollabTab('activity')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                        activeCollabTab === 'activity'
+                          ? 'bg-powder-50 dark:bg-powder-950/60 text-powder-600 dark:text-powder-300'
+                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      <History className="w-3.5 h-3.5" />
+                      <span>Activity Log ({activities.length})</span>
+                    </button>
+                  </div>
+
+                  {/* COMMENTS TAB */}
+                  {activeCollabTab === 'comments' && (
+                    <div className="space-y-3">
+                      {/* Comment list */}
+                      {commentsLoading ? (
+                        <div className="py-4 text-center text-xs text-slate-400">Loading comments...</div>
+                      ) : comments.length === 0 ? (
+                        <div className="p-4 rounded-xl bg-slate-50/50 dark:bg-slate-900/50 border border-dashed border-slate-200 dark:border-slate-800 text-center text-xs text-slate-400">
+                          No comments yet. Start the collaboration!
+                        </div>
+                      ) : (
+                        <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                          {comments.map((c) => {
+                            const isAuthor = c.author?._id === currentUser?._id;
+                            const canModerate = isOwner || isManager;
+                            const isEditingThis = editingCommentId === c._id;
+
+                            return (
+                              <div
+                                key={c._id}
+                                className="p-3 rounded-xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 space-y-1.5 text-xs"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-5 h-5 rounded-full bg-powder-100 dark:bg-powder-900/60 text-powder-600 dark:text-powder-300 font-bold flex items-center justify-center text-[10px]">
+                                      {c.author?.name ? c.author.name.charAt(0).toUpperCase() : 'U'}
+                                    </div>
+                                    <span className="font-bold text-slate-800 dark:text-slate-200">
+                                      {c.author?.name || 'Member'}
+                                    </span>
+                                    {isAuthor && (
+                                      <span className="text-[9px] px-1 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                        You
+                                      </span>
+                                    )}
+                                    <span className="text-[10px] text-slate-400">
+                                      {new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  </div>
+
+                                  {/* Actions */}
+                                  <div className="flex items-center gap-1.5">
+                                    {isAuthor && !isEditingThis && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingCommentId(c._id);
+                                          setEditingCommentText(c.content);
+                                        }}
+                                        className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition"
+                                        title="Edit comment"
+                                      >
+                                        <Edit3 className="w-3 h-3" />
+                                      </button>
+                                    )}
+                                    {(isAuthor || canModerate) && !isEditingThis && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteComment(c._id)}
+                                        className="p-1 rounded text-slate-400 hover:text-rose-500 transition"
+                                        title="Delete comment"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {isEditingThis ? (
+                                  <div className="space-y-2 pt-1">
+                                    <textarea
+                                      value={editingCommentText}
+                                      onChange={(e) => setEditingCommentText(e.target.value)}
+                                      rows={2}
+                                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-900 dark:text-white resize-none focus:outline-hidden focus:ring-1 focus:ring-powder-500"
+                                    />
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditingCommentId(null)}
+                                        className="px-2 py-1 rounded text-[11px] text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleUpdateComment(c._id)}
+                                        className="px-2.5 py-1 rounded bg-powder-600 text-white text-[11px] font-semibold hover:bg-powder-700"
+                                      >
+                                        Save
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                                    {c.content}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Add comment input (unless VIEWER) */}
+                      {!isViewer ? (
+                        <form onSubmit={handleAddComment} className="flex items-start gap-2 pt-1">
+                          <textarea
+                            value={commentContent}
+                            onChange={(e) => setCommentContent(e.target.value)}
+                            placeholder="Write a comment or note..."
+                            rows={2}
+                            className="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs focus:outline-hidden focus:ring-2 focus:ring-powder-500/30 transition resize-none"
+                          />
+                          <button
+                            type="submit"
+                            disabled={submittingComment || !commentContent.trim()}
+                            className="px-3.5 py-2 mt-1 rounded-xl bg-powder-600 hover:bg-powder-700 text-white text-xs font-semibold shadow-xs transition disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            <span>Post</span>
+                          </button>
+                        </form>
+                      ) : (
+                        <p className="text-[11px] text-slate-400 italic">Viewers have read-only access to comments.</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ACTIVITY LOG TAB */}
+                  {activeCollabTab === 'activity' && (
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                      {activitiesLoading ? (
+                        <div className="py-4 text-center text-xs text-slate-400">Loading activity...</div>
+                      ) : activities.length === 0 ? (
+                        <div className="p-4 rounded-xl bg-slate-50/50 dark:bg-slate-900/50 border border-dashed border-slate-200 dark:border-slate-800 text-center text-xs text-slate-400">
+                          No activity records logged yet.
+                        </div>
+                      ) : (
+                        activities.map((a) => (
+                          <div
+                            key={a._id}
+                            className="p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex items-start gap-2.5 text-xs"
+                          >
+                            <div className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold flex items-center justify-center text-[9px] shrink-0 mt-0.5">
+                              {a.actor?.name ? a.actor.name.charAt(0).toUpperCase() : 'A'}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-slate-800 dark:text-slate-200 leading-snug">
+                                {a.details}
+                              </p>
+                              <span className="text-[10px] text-slate-400">
+                                {new Date(a.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>

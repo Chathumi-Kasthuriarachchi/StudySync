@@ -52,6 +52,11 @@ export const removeProjectMember = async (id, userId) => {
   return res.data;
 };
 
+export const getProjectWorkload = async (id) => {
+  const res = await api.get(`/api/projects/${id}/workload`);
+  return res.data;
+};
+
 // ── Invitations ───────────────────────────────────────────────────────────────
 export const inviteUser = async (id, { email, userId, role }) => {
   const res = await api.post(`/api/projects/${id}/invitations`, { email, userId, role });

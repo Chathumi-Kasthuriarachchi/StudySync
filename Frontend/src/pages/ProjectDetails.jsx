@@ -31,6 +31,7 @@ import {
   removeProjectMember,
   getProjectInvitations,
   cancelInvitation,
+  getProjectWorkload,
 } from '../services/projectService';
 import { useAuth } from '../context/AuthContext';
 import { getRoleBadge, getStatusBadge, calculateTimeline } from './Projects';
@@ -56,6 +57,7 @@ const ProjectDetails = () => {
   const [project, setProject] = useState(null);
   const [members, setMembers] = useState([]);
   const [invitations, setInvitations] = useState([]);
+  const [workloadData, setWorkloadData] = useState(null);
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'timeline' | 'members' | 'settings'
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -79,9 +81,10 @@ const ProjectDetails = () => {
     try {
       setLoading(true);
       setError('');
-      const [projectRes, membersRes] = await Promise.all([
+      const [projectRes, membersRes, workloadRes] = await Promise.all([
         getProjectById(id),
         getProjectMembers(id),
+        getProjectWorkload(id).catch(() => null),
       ]);
 
       if (projectRes.success) {
@@ -96,6 +99,10 @@ const ProjectDetails = () => {
 
       if (membersRes.success) {
         setMembers(membersRes.data);
+      }
+
+      if (workloadRes && workloadRes.success) {
+        setWorkloadData(workloadRes.data);
       }
 
       // Fetch pending project invitations if user is Owner or Manager
@@ -628,6 +635,103 @@ const ProjectDetails = () => {
       {/* ── TAB 3: MEMBERS ──────────────────────────────────────────────────── */}
       {activeTab === 'members' && (
         <div className="space-y-6 animate-fadeIn">
+          {/* Member Workload Section */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-6 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>Team Workload & Assignment Distribution</span>
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Real-time visibility into who is working on what across the project.
+                </p>
+              </div>
+
+              {workloadData && (
+                <div className="flex items-center gap-2 flex-wrap text-xs">
+                  <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold">
+                    Total: {workloadData.totalProjectTasks} tasks
+                  </span>
+                  {workloadData.unassignedTasks > 0 && (
+                    <span className="px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60 font-semibold">
+                      {workloadData.unassignedTasks} unassigned
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {workloadData?.workload && workloadData.workload.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+                {workloadData.workload.map((w) => {
+                  const mRole = getRoleBadge(w.member.role);
+                  return (
+                    <div
+                      key={w.member._id}
+                      className="p-4 rounded-xl border border-slate-200/70 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 space-y-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-powder-100 dark:bg-powder-900/60 text-powder-600 dark:text-powder-300 font-bold flex items-center justify-center text-xs">
+                            {w.member.name ? w.member.name.charAt(0).toUpperCase() : 'U'}
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                              {w.member.name}
+                            </h4>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${mRole.bg}`}>
+                              {mRole.label}
+                            </span>
+                          </div>
+                        </div>
+
+                        <span className="text-xs font-extrabold text-slate-900 dark:text-white">
+                          {w.totalAssigned} {w.totalAssigned === 1 ? 'task' : 'tasks'}
+                        </span>
+                      </div>
+
+                      {/* Progress Bar */}
+                      <div className="space-y-1">
+                        <div className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-mint-500 rounded-full transition-all duration-300"
+                            style={{ width: `${w.completionPct}%` }}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] text-slate-400">
+                          <span>Progress</span>
+                          <span className="font-bold text-slate-700 dark:text-slate-300">
+                            {w.completionPct}% completed
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Breakdown pills */}
+                      <div className="grid grid-cols-3 gap-1.5 text-center text-[10px]">
+                        <div className="p-1.5 rounded-lg bg-white dark:bg-slate-800/80 border border-slate-100 dark:border-slate-800">
+                          <span className="block font-bold text-mint-600 dark:text-mint-400">{w.completed}</span>
+                          <span className="text-slate-400">Done</span>
+                        </div>
+                        <div className="p-1.5 rounded-lg bg-white dark:bg-slate-800/80 border border-slate-100 dark:border-slate-800">
+                          <span className="block font-bold text-powder-600 dark:text-powder-400">{w.inProgress}</span>
+                          <span className="text-slate-400">Active</span>
+                        </div>
+                        <div className="p-1.5 rounded-lg bg-white dark:bg-slate-800/80 border border-slate-100 dark:border-slate-800">
+                          <span className="block font-bold text-slate-600 dark:text-slate-300">{w.todo}</span>
+                          <span className="text-slate-400">To Do</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-4 text-center text-xs text-slate-400">
+                No member workload data available.
+              </div>
+            )}
+          </div>
+
           {/* Members Table Card */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
             <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
