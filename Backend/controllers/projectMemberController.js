@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Project = require("../models/Project");
 const ProjectMembership = require("../models/ProjectMembership");
 const User = require("../models/User");
+const Task = require("../models/Task");
 
 /**
  * getProjectMembers
@@ -289,6 +290,11 @@ const removeProjectMember = async (req, res) => {
         // If self-leaving, any non-owner member can leave
         if (isSelf) {
             await ProjectMembership.findByIdAndDelete(targetMembership._id);
+            // Safe Member Removal: unassign any active tasks assigned to this member in this project
+            await Task.updateMany(
+                { project: req.project._id, assignee: targetMembership.user },
+                { $set: { assignee: null } }
+            );
             return res.status(200).json({
                 success: true,
                 message: "You have left the project",
@@ -313,6 +319,12 @@ const removeProjectMember = async (req, res) => {
 
         await ProjectMembership.findByIdAndDelete(targetMembership._id);
 
+        // Safe Member Removal: unassign any active tasks assigned to this member in this project
+        await Task.updateMany(
+            { project: req.project._id, assignee: targetMembership.user },
+            { $set: { assignee: null } }
+        );
+
         return res.status(200).json({
             success: true,
             message: "Member removed from the project",
@@ -327,9 +339,80 @@ const removeProjectMember = async (req, res) => {
     }
 };
 
+/**
+ * getProjectWorkload
+ * GET /api/projects/:id/workload
+ * Protected by requireProjectMember.
+ *
+ * Computes workload metrics for all members of the project.
+ */
+const getProjectWorkload = async (req, res) => {
+    try {
+        const projectId = req.project._id;
+
+        // Fetch all project members
+        const memberships = await ProjectMembership.find({ project: projectId })
+            .populate("user", "_id name email profileImageURL")
+            .sort({ joinedAt: 1 });
+
+        // Fetch all project tasks
+        const tasks = await Task.find({ project: projectId }).select(
+            "title status priority assignee dueDate subtasks"
+        );
+
+        // Group tasks by assignee
+        const workload = memberships.map((m) => {
+            const memberUser = m.user;
+            const memberTasks = tasks.filter(
+                (t) => t.assignee && t.assignee.toString() === memberUser._id.toString()
+            );
+
+            const totalAssigned = memberTasks.length;
+            const completed = memberTasks.filter((t) => t.status === "COMPLETED").length;
+            const inProgress = memberTasks.filter((t) => t.status === "IN_PROGRESS").length;
+            const todo = memberTasks.filter((t) => t.status === "TODO").length;
+            const completionPct = totalAssigned > 0 ? Math.round((completed / totalAssigned) * 100) : 0;
+
+            return {
+                member: {
+                    _id: memberUser._id,
+                    name: memberUser.name,
+                    email: memberUser.email,
+                    profileImageURL: memberUser.profileImageURL,
+                    role: m.role,
+                },
+                totalAssigned,
+                completed,
+                inProgress,
+                todo,
+                completionPct,
+            };
+        });
+
+        const unassignedTasks = tasks.filter((t) => !t.assignee).length;
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                workload,
+                unassignedTasks,
+                totalProjectTasks: tasks.length,
+            },
+        });
+    } catch (err) {
+        console.error("getProjectWorkload error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to calculate project workload",
+            error: err.message,
+        });
+    }
+};
+
 module.exports = {
     getProjectMembers,
     addProjectMember,
     updateMemberRole,
     removeProjectMember,
+    getProjectWorkload,
 };

@@ -1,4 +1,10 @@
 const mongoose = require("mongoose");
+const dns = require("dns");
+
+// Ensure reliable DNS resolution for MongoDB Atlas SRV records on Windows networks
+try {
+    dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
+} catch (_) {}
 
 const connectDB = async () => {
     try {

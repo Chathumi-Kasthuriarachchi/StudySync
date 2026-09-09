@@ -20,6 +20,7 @@ const {
     addProjectMember,
     updateMemberRole,
     removeProjectMember,
+    getProjectWorkload,
 } = require("../controllers/projectMemberController");
 
 const {
@@ -62,6 +63,8 @@ router.route("/:id/members")
 router.route("/:id/members/:userId")
     .put(requireProjectMember, requireProjectRole("OWNER", "MANAGER"), updateMemberRole)
     .delete(requireProjectMember, removeProjectMember);
+
+router.get("/:id/workload", requireProjectMember, getProjectWorkload);
 
 // ── Project Invitations Management ────────────────────────────────────────────
 router.route("/:id/invitations")

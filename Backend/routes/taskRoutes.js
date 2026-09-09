@@ -17,6 +17,14 @@ const {
     getPersonalTasks,
 } = require("../controllers/taskController");
 
+const {
+    getTaskComments,
+    createTaskComment,
+    updateTaskComment,
+    deleteTaskComment,
+    getTaskActivities,
+} = require("../controllers/commentController");
+
 // Protect all task routes
 router.use(protect);
 
@@ -37,5 +45,17 @@ router.patch("/:taskId/status", requireTaskAccess, updateTaskStatus);
 router.post("/:taskId/subtasks", requireTaskAccess, addSubtask);
 router.patch("/:taskId/subtasks/:subtaskId", requireTaskAccess, toggleSubtask);
 router.delete("/:taskId/subtasks/:subtaskId", requireTaskAccess, deleteSubtask);
+
+// ── Comments Operations ───────────────────────────────────────────────────────
+router.route("/:taskId/comments")
+    .get(requireTaskAccess, getTaskComments)
+    .post(requireTaskAccess, createTaskComment);
+
+router.route("/:taskId/comments/:commentId")
+    .put(requireTaskAccess, updateTaskComment)
+    .delete(requireTaskAccess, deleteTaskComment);
+
+// ── Activity History ──────────────────────────────────────────────────────────
+router.get("/:taskId/activities", requireTaskAccess, getTaskActivities);
 
 module.exports = router;

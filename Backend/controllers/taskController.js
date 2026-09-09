@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Task = require("../models/Task");
 const Project = require("../models/Project");
 const ProjectMembership = require("../models/ProjectMembership");
+const { logTaskActivity } = require("../utils/activityLogger");
 
 /**
  * createTask
@@ -116,8 +117,17 @@ const createTask = async (req, res) => {
         });
 
         const populatedTask = await Task.findById(task._id)
+            .populate("project", "_id name status dueDate owner")
             .populate("assignee", "_id name email profileImageURL")
             .populate("createdBy", "_id name email profileImageURL");
+
+        await logTaskActivity({
+            task: task._id,
+            project: projectId,
+            actor: req.user._id,
+            action: "CREATED",
+            details: `${req.user.name || "A member"} created this task`,
+        });
 
         return res.status(201).json({
             success: true,
@@ -358,7 +368,7 @@ const getTaskById = async (req, res) => {
 const updateTask = async (req, res) => {
     try {
         const task = req.task;
-        const userRole = req.membership.role;
+        const userRole = req.membership?.role || req.userProjectRole || (task.project ? "MEMBER" : "OWNER");
         const userIdStr = req.user._id.toString();
 
         if (userRole === "VIEWER") {
@@ -470,8 +480,17 @@ const updateTask = async (req, res) => {
         await task.save();
 
         const updated = await Task.findById(task._id)
+            .populate("project", "_id name status dueDate owner")
             .populate("assignee", "_id name email profileImageURL")
             .populate("createdBy", "_id name email profileImageURL");
+
+        await logTaskActivity({
+            task: task._id,
+            project: task.project || null,
+            actor: req.user._id,
+            action: "UPDATED",
+            details: `${req.user.name || "A member"} updated task details`,
+        });
 
         return res.status(200).json({
             success: true,
@@ -498,7 +517,7 @@ const updateTask = async (req, res) => {
 const updateTaskStatus = async (req, res) => {
     try {
         const task = req.task;
-        const userRole = req.membership.role;
+        const userRole = req.membership?.role || req.userProjectRole || (task.project ? "MEMBER" : "OWNER");
         const { status } = req.body;
 
         if (userRole === "VIEWER") {
@@ -515,12 +534,38 @@ const updateTaskStatus = async (req, res) => {
             });
         }
 
-        task.status = status.toUpperCase();
+        const prevStatus = task.status;
+        const newStatus = status.toUpperCase();
+        task.status = newStatus;
+
+        // Predictable subtask synchronization:
+        if (task.subtasks && task.subtasks.length > 0) {
+            if (newStatus === "COMPLETED") {
+                task.subtasks.forEach((st) => {
+                    st.completed = true;
+                });
+            } else if (newStatus === "TODO") {
+                task.subtasks.forEach((st) => {
+                    st.completed = false;
+                });
+            }
+        }
+
         await task.save();
 
         const updated = await Task.findById(task._id)
+            .populate("project", "_id name status dueDate owner")
             .populate("assignee", "_id name email profileImageURL")
             .populate("createdBy", "_id name email profileImageURL");
+
+        await logTaskActivity({
+            task: task._id,
+            project: task.project || null,
+            actor: req.user._id,
+            action: "STATUS_CHANGED",
+            details: `${req.user.name || "A member"} changed status to ${newStatus}`,
+            metadata: { prevStatus, newStatus },
+        });
 
         return res.status(200).json({
             success: true,
@@ -548,7 +593,7 @@ const updateTaskStatus = async (req, res) => {
 const deleteTask = async (req, res) => {
     try {
         const task = req.task;
-        const userRole = req.membership.role;
+        const userRole = req.membership?.role || req.userProjectRole || (task.project ? "MEMBER" : "OWNER");
         const userIdStr = req.user._id.toString();
 
         if (userRole === "VIEWER") {
@@ -590,7 +635,7 @@ const deleteTask = async (req, res) => {
 const addSubtask = async (req, res) => {
     try {
         const task = req.task;
-        const userRole = req.membership.role;
+        const userRole = req.membership?.role || req.userProjectRole || (task.project ? "MEMBER" : "OWNER");
 
         if (userRole === "VIEWER") {
             return res.status(403).json({ success: false, message: "Viewers cannot add subtasks" });
@@ -611,8 +656,17 @@ const addSubtask = async (req, res) => {
         await task.save();
 
         const updated = await Task.findById(task._id)
+            .populate("project", "_id name status dueDate owner")
             .populate("assignee", "_id name email profileImageURL")
             .populate("createdBy", "_id name email profileImageURL");
+
+        await logTaskActivity({
+            task: task._id,
+            project: task.project || null,
+            actor: req.user._id,
+            action: "SUBTASK_ADDED",
+            details: `${req.user.name || "A member"} added subtask: "${title.trim()}"`,
+        });
 
         return res.status(201).json({
             success: true,
@@ -636,7 +690,7 @@ const addSubtask = async (req, res) => {
 const toggleSubtask = async (req, res) => {
     try {
         const task = req.task;
-        const userRole = req.membership.role;
+        const userRole = req.membership?.role || req.userProjectRole || (task.project ? "MEMBER" : "OWNER");
 
         if (userRole === "VIEWER") {
             return res.status(403).json({ success: false, message: "Viewers cannot toggle subtasks" });
@@ -662,8 +716,18 @@ const toggleSubtask = async (req, res) => {
         await task.save();
 
         const updated = await Task.findById(task._id)
+            .populate("project", "_id name status dueDate owner")
             .populate("assignee", "_id name email profileImageURL")
             .populate("createdBy", "_id name email profileImageURL");
+
+        await logTaskActivity({
+            task: task._id,
+            project: task.project || null,
+            actor: req.user._id,
+            action: "SUBTASK_TOGGLED",
+            details: `${req.user.name || "A member"} marked subtask "${subtask.title}" as ${subtask.completed ? "completed" : "incomplete"}`,
+            metadata: { subtaskId: subtask._id, completed: subtask.completed },
+        });
 
         return res.status(200).json({
             success: true,
@@ -687,7 +751,7 @@ const toggleSubtask = async (req, res) => {
 const deleteSubtask = async (req, res) => {
     try {
         const task = req.task;
-        const userRole = req.membership.role;
+        const userRole = req.membership?.role || req.userProjectRole || (task.project ? "MEMBER" : "OWNER");
 
         if (userRole === "VIEWER") {
             return res.status(403).json({ success: false, message: "Viewers cannot delete subtasks" });
@@ -706,6 +770,7 @@ const deleteSubtask = async (req, res) => {
         await task.save();
 
         const updated = await Task.findById(task._id)
+            .populate("project", "_id name status dueDate owner")
             .populate("assignee", "_id name email profileImageURL")
             .populate("createdBy", "_id name email profileImageURL");
 

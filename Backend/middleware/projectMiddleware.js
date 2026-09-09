@@ -126,6 +126,7 @@ const requireTaskAccess = async (req, res, next) => {
             req.task = task;
             req.project = null;
             req.membership = { role: "OWNER" }; // Creator has full owner permissions over personal tasks
+            req.userProjectRole = "OWNER";
             return next();
         }
 
@@ -147,6 +148,7 @@ const requireTaskAccess = async (req, res, next) => {
         req.task = task;
         req.project = project;
         req.membership = membership;
+        req.userProjectRole = membership.role;
         next();
     } catch (err) {
         console.error("requireTaskAccess error:", err);
