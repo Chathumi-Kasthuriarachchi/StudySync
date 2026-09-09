@@ -15,6 +15,8 @@ import {
   Shield,
   Layers,
   CheckSquare,
+  Sparkles,
+  FolderKanban,
 } from 'lucide-react';
 import {
   updateTask,
@@ -25,6 +27,7 @@ import {
   deleteSubtask,
 } from '../../services/taskService';
 import { useAuth } from '../../context/AuthContext';
+import TaskProgressBar from './TaskProgressBar';
 
 /**
  * Priority badge helper
@@ -53,7 +56,7 @@ export const getPriorityBadge = (priority) => {
     default:
       return {
         label: 'Low',
-        bg: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
+        bg: 'bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700',
         dot: 'bg-slate-400',
       };
   }
@@ -68,30 +71,29 @@ export const getTaskStatusBadge = (status) => {
       return {
         label: 'Completed',
         bg: 'bg-mint-50 dark:bg-mint-950/60 text-mint-700 dark:text-mint-300 border-mint-200 dark:border-mint-800',
-        color: 'text-mint-600 dark:text-mint-400',
+        dot: 'bg-mint-500',
       };
     case 'IN_PROGRESS':
       return {
         label: 'In Progress',
         bg: 'bg-powder-50 dark:bg-powder-950/60 text-powder-700 dark:text-powder-300 border-powder-200 dark:border-powder-800',
-        color: 'text-powder-600 dark:text-powder-400',
+        dot: 'bg-powder-500',
       };
     case 'TODO':
     default:
       return {
         label: 'To Do',
-        bg: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
-        color: 'text-slate-500 dark:text-slate-400',
+        bg: 'bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700',
+        dot: 'bg-slate-400',
       };
   }
 };
 
-const formatDateInput = (date) => {
-  if (!date) return '';
-  const d = new Date(date);
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${month}-${day}`;
+const formatDateInput = (dateStr) => {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  return d.toISOString().split('T')[0];
 };
 
 const TaskDetailsModal = ({
@@ -107,7 +109,7 @@ const TaskDetailsModal = ({
   const [task, setTask] = useState(initialTask);
   const [isEditing, setIsEditing] = useState(false);
 
-  // Edit fields state
+  // Edit form states
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editPriority, setEditPriority] = useState('MEDIUM');
@@ -116,7 +118,7 @@ const TaskDetailsModal = ({
   const [editDueDate, setEditDueDate] = useState('');
   const [editTags, setEditTags] = useState('');
 
-  // Subtask creation
+  // Subtask creation state
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [subtaskLoading, setSubtaskLoading] = useState(false);
 
@@ -142,14 +144,15 @@ const TaskDetailsModal = ({
 
   if (!isOpen || !task) return null;
 
-  const isOwner = projectRole === 'OWNER';
+  const isPersonal = !task.project;
+  const isOwner = isPersonal || projectRole === 'OWNER';
   const isManager = projectRole === 'MANAGER';
-  const isViewer = projectRole === 'VIEWER';
+  const isViewer = !isPersonal && projectRole === 'VIEWER';
   const isCreator = task.createdBy?._id === currentUser?._id;
   const isAssignee = task.assignee?._id === currentUser?._id;
 
-  const canEdit = !isViewer && (isOwner || isManager || isCreator || isAssignee);
-  const canDelete = !isViewer && (isOwner || isManager || isCreator);
+  const canEdit = isPersonal || (!isViewer && (isOwner || isManager || isCreator || isAssignee));
+  const canDelete = isPersonal || (!isViewer && (isOwner || isManager || isCreator));
 
   // ── Quick Status Toggle ─────────────────────────────────────────────────────
   const handleStatusChange = async (newStatus) => {
@@ -242,15 +245,20 @@ const TaskDetailsModal = ({
 
     try {
       setLoading(true);
-      const res = await updateTask(task._id, {
+      const updatePayload = {
         title: editTitle.trim(),
         description: editDescription.trim(),
         priority: editPriority,
-        assignee: editAssignee || null,
         startDate: editStartDate || null,
         dueDate: editDueDate || null,
         tags,
-      });
+      };
+
+      if (!isPersonal) {
+        updatePayload.assignee = editAssignee || null;
+      }
+
+      const res = await updateTask(task._id, updatePayload);
 
       if (res.success && res.data) {
         setTask(res.data);
@@ -289,17 +297,13 @@ const TaskDetailsModal = ({
   // Subtask completion metric
   const subtasksList = Array.isArray(task.subtasks) ? task.subtasks : [];
   const completedSubtasksCount = subtasksList.filter((s) => s.completed).length;
-  const subtasksPct =
-    subtasksList.length > 0
-      ? Math.round((completedSubtasksCount / subtasksList.length) * 100)
-      : 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
       <div className="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col animate-scaleIn">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 bg-slate-50/50 dark:bg-slate-950/30">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span
               className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${statusBadge.bg}`}
             >
@@ -310,6 +314,17 @@ const TaskDetailsModal = ({
             >
               {priorityBadge.label}
             </span>
+            {isPersonal ? (
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold border bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 flex items-center gap-1">
+                <Sparkles className="w-3 h-3" />
+                Personal Task
+              </span>
+            ) : task.project ? (
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold border bg-powder-50 dark:bg-powder-950/60 text-powder-700 dark:text-powder-300 border-powder-200 dark:border-powder-800 flex items-center gap-1">
+                <FolderKanban className="w-3 h-3" />
+                {task.project.name || 'Project Task'}
+              </span>
+            ) : null}
           </div>
 
           <div className="flex items-center gap-2">
@@ -391,7 +406,7 @@ const TaskDetailsModal = ({
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className={`grid grid-cols-1 ${isPersonal ? '' : 'sm:grid-cols-2'} gap-4`}>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
                     Priority
@@ -408,23 +423,25 @@ const TaskDetailsModal = ({
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
-                    Assignee
-                  </label>
-                  <select
-                    value={editAssignee}
-                    onChange={(e) => setEditAssignee(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-semibold focus:outline-hidden focus:ring-2 focus:ring-powder-500/30 transition"
-                  >
-                    <option value="">Unassigned</option>
-                    {members.map((m) => (
-                      <option key={m.user?._id || m._id} value={m.user?._id || m._id}>
-                        {m.user?.name || 'Member'} ({m.role})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {!isPersonal && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                      Assignee
+                    </label>
+                    <select
+                      value={editAssignee}
+                      onChange={(e) => setEditAssignee(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-semibold focus:outline-hidden focus:ring-2 focus:ring-powder-500/30 transition"
+                    >
+                      <option value="">Unassigned</option>
+                      {members.map((m) => (
+                        <option key={m.user?._id || m._id} value={m.user?._id || m._id}>
+                          {m.user?.name || 'Member'} ({m.role})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -534,10 +551,14 @@ const TaskDetailsModal = ({
                   </span>
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-full bg-mint-100 dark:bg-mint-950/60 text-mint-700 dark:text-mint-300 font-bold flex items-center justify-center text-[10px]">
-                      {task.assignee?.name ? task.assignee.name.charAt(0).toUpperCase() : 'U'}
+                      {isPersonal
+                        ? 'Me'
+                        : task.assignee?.name
+                        ? task.assignee.name.charAt(0).toUpperCase()
+                        : 'U'}
                     </div>
                     <span className="font-semibold text-slate-800 dark:text-slate-200">
-                      {task.assignee?.name || 'Unassigned'}
+                      {isPersonal ? 'Self (Personal Task)' : task.assignee?.name || 'Unassigned'}
                     </span>
                   </div>
                 </div>
@@ -598,19 +619,17 @@ const TaskDetailsModal = ({
                       ({completedSubtasksCount}/{subtasksList.length})
                     </span>
                   </h3>
-                  <span className="text-[11px] font-bold text-mint-600 dark:text-mint-400">
-                    {subtasksPct}%
-                  </span>
                 </div>
 
-                {/* Progress bar */}
+                {/* Reusable Progress Bar */}
                 {subtasksList.length > 0 && (
-                  <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-mint-500 rounded-full transition-all duration-300"
-                      style={{ width: `${subtasksPct}%` }}
-                    />
-                  </div>
+                  <TaskProgressBar
+                    subtasks={subtasksList}
+                    status={task.status}
+                    size="sm"
+                    showPercentage={true}
+                    showSubtaskCount={false}
+                  />
                 )}
 
                 {/* Subtask Items */}

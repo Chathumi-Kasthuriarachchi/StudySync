@@ -24,6 +24,7 @@ import TaskDetailsModal, {
   getPriorityBadge,
   getTaskStatusBadge,
 } from '../tasks/TaskDetailsModal';
+import TaskProgressBar from '../tasks/TaskProgressBar';
 
 const ProjectTasksTab = ({ projectId, projectRole, members = [] }) => {
   const [tasks, setTasks] = useState([]);
@@ -475,6 +476,19 @@ const ProjectTasksTab = ({ projectId, projectRole, members = [] }) => {
                       <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">
                         {task.description}
                       </p>
+                    )}
+
+                    {/* Subtask Mini Progress Bar */}
+                    {subtaskCount > 0 && (
+                      <div className="max-w-xs pt-1">
+                        <TaskProgressBar
+                          subtasks={task.subtasks}
+                          status={task.status}
+                          size="xs"
+                          showPercentage={true}
+                          showSubtaskCount={true}
+                        />
+                      </div>
                     )}
 
                     {/* Tags */}

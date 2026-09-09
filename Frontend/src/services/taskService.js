@@ -16,9 +16,19 @@ export const createTask = async (projectId, taskData) => {
   return res.data;
 };
 
-// ── User Assigned Tasks ───────────────────────────────────────────────────────
+// ── User Assigned & Personal Tasks ────────────────────────────────────────────
 export const getMyTasks = async (params = {}) => {
   const res = await api.get('/api/tasks/my', { params });
+  return res.data;
+};
+
+export const getPersonalTasks = async (params = {}) => {
+  const res = await api.get('/api/tasks/personal', { params });
+  return res.data;
+};
+
+export const createPersonalTask = async (taskData) => {
+  const res = await api.post('/api/tasks/personal', taskData);
   return res.data;
 };
 
