@@ -22,6 +22,11 @@ export const getMyTasks = async (params = {}) => {
   return res.data;
 };
 
+export const getRecommendedTasks = async (params = {}) => {
+  const res = await api.get('/api/tasks/recommended', { params });
+  return res.data;
+};
+
 export const getPersonalTasks = async (params = {}) => {
   const res = await api.get('/api/tasks/personal', { params });
   return res.data;

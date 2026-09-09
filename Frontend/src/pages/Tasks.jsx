@@ -28,6 +28,47 @@ import TaskDetailsModal, {
 } from '../components/tasks/TaskDetailsModal';
 import TaskProgressBar from '../components/tasks/TaskProgressBar';
 
+/**
+ * Task Urgency calculator helper for local client sorting & badges (Phase 7)
+ */
+const calculateTaskUrgencyLocal = (t) => {
+  if (!t || t.status === 'COMPLETED') return 0;
+  let prio = 15;
+  if (t.priority === 'URGENT') prio = 35;
+  else if (t.priority === 'HIGH') prio = 25;
+  else if (t.priority === 'LOW') prio = 5;
+
+  let dead = 0;
+  if (t.dueDate) {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const dueTime = new Date(t.dueDate).getTime();
+    if (dueTime < startOfToday.getTime()) dead = 45;
+    else if (dueTime <= endOfToday.getTime()) dead = 38;
+    else {
+      const diffDays = Math.ceil((dueTime - endOfToday.getTime()) / (24 * 60 * 60 * 1000));
+      if (diffDays <= 1) dead = 30;
+      else if (diffDays <= 2) dead = 24;
+      else if (diffDays <= 3) dead = 18;
+      else if (diffDays <= 7) dead = 10;
+      else dead = 5;
+    }
+  }
+
+  const sub = Array.isArray(t.subtasks) ? t.subtasks : [];
+  let prog = 0;
+  if (sub.length > 0) {
+    prog = Math.round((sub.filter((s) => s.completed).length / sub.length) * 100);
+  } else if (t.status === 'IN_PROGRESS') prog = 50;
+
+  const incompleteFraction = (100 - prog) / 100;
+  const progWeight = Math.round(incompleteFraction * 15);
+  const statusWeight = t.status === 'IN_PROGRESS' ? 5 : 0;
+
+  return Math.min(100, Math.max(0, prio + dead + progWeight + statusWeight));
+};
+
 const Tasks = () => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -226,6 +267,13 @@ const Tasks = () => {
         return true;
       })
       .sort((a, b) => {
+        if (sortBy === 'urgency') {
+          const scoreA = calculateTaskUrgencyLocal(a);
+          const scoreB = calculateTaskUrgencyLocal(b);
+          if (scoreB !== scoreA) return scoreB - scoreA;
+          if (a.dueDate && b.dueDate) return new Date(a.dueDate) - new Date(b.dueDate);
+          return 0;
+        }
         if (sortBy === 'dueDate') {
           if (!a.dueDate) return 1;
           if (!b.dueDate) return -1;
@@ -489,6 +537,7 @@ const Tasks = () => {
               className="w-full px-2 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 focus:outline-hidden focus:ring-2 focus:ring-powder-500"
             >
               <option value="dueDate">Due Date</option>
+              <option value="urgency">Urgency (Smart) ⚡</option>
               <option value="priority">Priority</option>
               <option value="createdAt">Newest</option>
             </select>
@@ -627,6 +676,14 @@ const Tasks = () => {
                         />
                         {pBadge.label}
                       </span>
+
+                      {/* Urgency Badge for Active Tasks */}
+                      {!isCompleted && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-powder-50/80 dark:bg-powder-950/60 text-powder-700 dark:text-powder-300 border border-powder-200/70 dark:border-powder-800 shrink-0">
+                          <Sparkles className="w-2.5 h-2.5 text-powder-500" />
+                          <span>Urgency: {calculateTaskUrgencyLocal(task)}</span>
+                        </span>
+                      )}
 
                       {/* Overdue Alert */}
                       {overdue && (

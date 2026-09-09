@@ -52,6 +52,65 @@ const getPriorityBadge = (priority) => {
 };
 
 /**
+ * Urgency Score styling helper (Phase 7 Task Intelligence)
+ */
+const getUrgencyBadge = (score) => {
+  if (score >= 80) {
+    return {
+      badge: 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+      bar: 'bg-rose-500',
+      label: 'High Urgency',
+    };
+  }
+  if (score >= 50) {
+    return {
+      badge: 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+      bar: 'bg-amber-500',
+      label: 'Medium Urgency',
+    };
+  }
+  return {
+    badge: 'bg-mint-50 dark:bg-mint-950/60 text-mint-700 dark:text-mint-300 border-mint-200 dark:border-mint-800',
+    bar: 'bg-mint-500',
+    label: 'Low Urgency',
+  };
+};
+
+/**
+ * Deadline status badge helper (Phase 7 Task Intelligence)
+ */
+const getDeadlineStatusBadge = (status) => {
+  switch (status) {
+    case 'OVERDUE':
+      return {
+        text: 'Overdue',
+        className: 'text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800 font-bold',
+      };
+    case 'DUE_TODAY':
+      return {
+        text: 'Due Today',
+        className: 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800 font-bold',
+      };
+    case 'DUE_SOON':
+      return {
+        text: 'Due Soon',
+        className: 'text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/60 border-sky-200 dark:border-sky-800 font-semibold',
+      };
+    case 'UPCOMING':
+      return {
+        text: 'Upcoming',
+        className: 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700',
+      };
+    case 'NO_DEADLINE':
+    default:
+      return {
+        text: 'No Deadline',
+        className: 'text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800',
+      };
+  }
+};
+
+/**
  * Due date badge helper
  */
 const formatDueLabel = (dateStr) => {
@@ -227,6 +286,7 @@ const Dashboard = () => {
 
   const dueTodayTasks = dashboardData?.dueTodayTasks || [];
   const upcomingTasks = dashboardData?.upcomingTasks || [];
+  const recommendedTasks = dashboardData?.recommendedTasks || [];
   const activeTaskList = activeTaskTab === 'dueToday' ? dueTodayTasks : upcomingTasks;
 
   return (
@@ -403,6 +463,154 @@ const Dashboard = () => {
             </Link>
           </div>
         </div>
+      </div>
+
+      {/* ── Task Intelligence: What Should I Work on Next? ─────────────────── */}
+      <div className="bg-gradient-to-br from-powder-50/40 via-white to-mint-50/30 dark:from-slate-900 dark:via-slate-900/95 dark:to-slate-800/60 rounded-3xl border border-powder-200/70 dark:border-slate-800 p-6 sm:p-7 shadow-xs space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-powder-100/80 dark:border-slate-800/80">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-powder-500 text-white flex items-center justify-center shadow-xs">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">
+                  What should I work on?
+                </h2>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-powder-100 dark:bg-powder-900/70 text-powder-700 dark:text-powder-300 border border-powder-200 dark:border-powder-800">
+                  Task Intelligence
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Rule-based recommendations prioritized by urgency score, upcoming deadlines, and remaining work.
+              </p>
+            </div>
+          </div>
+
+          <Link
+            to="/tasks"
+            className="text-xs font-bold text-powder-600 dark:text-powder-400 hover:text-powder-700 dark:hover:text-powder-300 flex items-center gap-1 self-start sm:self-center"
+          >
+            <span>View all tasks</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
+        {loading ? (
+          <div className="py-8 text-center text-xs text-slate-400">
+            Analyzing task urgency and ranking actionable tasks...
+          </div>
+        ) : recommendedTasks.length === 0 ? (
+          <div className="py-8 px-4 text-center rounded-2xl bg-white/80 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 space-y-2">
+            <CheckCircle2 className="w-8 h-8 text-mint-500 mx-auto" />
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+              All caught up!
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
+              You have no pending urgent tasks right now. Create a new task or review ongoing projects.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {recommendedTasks.map((item) => {
+              const task = item.task;
+              const prio = getPriorityBadge(task.priority);
+              const urgencyMeta = getUrgencyBadge(item.urgencyScore);
+              const deadlineMeta = getDeadlineStatusBadge(item.deadlineStatus);
+
+              return (
+                <div
+                  key={task._id}
+                  onClick={() => {
+                    setSelectedTask(task);
+                    setIsDetailsOpen(true);
+                  }}
+                  className="p-4 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800 hover:border-powder-300 dark:hover:border-powder-700/60 shadow-2xs hover:shadow-xs transition cursor-pointer flex flex-col justify-between group relative overflow-hidden"
+                >
+                  {item.isAtRisk && (
+                    <div className="absolute top-0 right-0 w-2.5 h-2.5 rounded-bl-lg bg-rose-500" title="At-Risk Task" />
+                  )}
+
+                  <div className="space-y-3">
+                    {/* Header Chips: Project/Personal + Priority */}
+                    <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                      {task.project ? (
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-powder-50 dark:bg-powder-950/60 text-powder-700 dark:text-powder-300 border border-powder-200/60 dark:border-powder-800/60 flex items-center gap-1 shrink-0">
+                          <FolderKanban className="w-2.5 h-2.5" />
+                          <span className="truncate max-w-[85px]">{task.project.name}</span>
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 shrink-0">
+                          Personal
+                        </span>
+                      )}
+
+                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border shrink-0 ${prio.badge}`}>
+                        {prio.label}
+                      </span>
+                    </div>
+
+                    {/* Task Title */}
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-powder-600 dark:group-hover:text-powder-400 transition line-clamp-2">
+                        {task.title}
+                      </h3>
+                    </div>
+
+                    {/* Urgency Score Indicator */}
+                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                          Urgency
+                        </span>
+                        <span className={`text-xs font-extrabold px-1.5 py-0.2 rounded border ${urgencyMeta.badge}`}>
+                          {item.urgencyScore}/100
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${urgencyMeta.bar}`}
+                          style={{ width: `${Math.min(100, Math.max(8, item.urgencyScore))}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Deadline Status Badge */}
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[11px] text-slate-400 font-medium">Deadline:</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${deadlineMeta.className}`}>
+                        {deadlineMeta.text}
+                      </span>
+                    </div>
+
+                    {/* Explainable Reasons ("Why?") */}
+                    {item.reasons && item.reasons.length > 0 && (
+                      <div className="p-2.5 rounded-xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 space-y-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                          Why this task?
+                        </span>
+                        <ul className="space-y-1 text-[11px] text-slate-600 dark:text-slate-300">
+                          {item.reasons.slice(0, 3).map((reason, idx) => (
+                            <li key={idx} className="flex items-start gap-1.5 leading-tight">
+                              <span className="w-1 h-1 rounded-full bg-powder-500 mt-1.5 shrink-0" />
+                              <span className="line-clamp-1">{reason}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Card Bottom Action */}
+                  <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-powder-600 dark:text-powder-400 font-semibold group-hover:translate-x-0.5 transition-transform">
+                    <span>Open Task</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* 3. Main Workspace Grid: Tasks Tabbed View & Live Activity Feed */}

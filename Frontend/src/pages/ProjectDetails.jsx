@@ -49,6 +49,30 @@ const formatDateInput = (date) => {
   return `${d.getFullYear()}-${month}-${day}`;
 };
 
+/**
+ * Workload signal badge helper (Phase 7 Task Intelligence)
+ */
+const getWorkloadSignalBadge = (signal) => {
+  switch (signal) {
+    case 'HIGH':
+      return {
+        label: 'High Workload',
+        badge: 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+      };
+    case 'MODERATE':
+      return {
+        label: 'Moderate Workload',
+        badge: 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+      };
+    case 'LOW':
+    default:
+      return {
+        label: 'Low Workload',
+        badge: 'bg-mint-50 dark:bg-mint-950/60 text-mint-700 dark:text-mint-300 border-mint-200 dark:border-mint-800',
+      };
+  }
+};
+
 const ProjectDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -685,9 +709,16 @@ const ProjectDetails = () => {
                           </div>
                         </div>
 
-                        <span className="text-xs font-extrabold text-slate-900 dark:text-white">
-                          {w.totalAssigned} {w.totalAssigned === 1 ? 'task' : 'tasks'}
-                        </span>
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="text-xs font-extrabold text-slate-900 dark:text-white">
+                            {w.totalAssigned} {w.totalAssigned === 1 ? 'task' : 'tasks'}
+                          </span>
+                          {w.workloadSignal && (
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${getWorkloadSignalBadge(w.workloadSignal).badge}`}>
+                              {w.workloadSignal}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {/* Progress Bar */}
@@ -807,6 +838,19 @@ const ProjectDetails = () => {
 
                     {/* Role & Actions */}
                     <div className="flex items-center gap-3 self-end sm:self-center">
+                      {/* Workload Signal Pill */}
+                      {(() => {
+                        const mWorkload = workloadData?.workload?.find((w) => w.member._id === m.user?._id);
+                        if (!mWorkload || !mWorkload.workloadSignal) return null;
+                        const sigBadge = getWorkloadSignalBadge(mWorkload.workloadSignal);
+                        return (
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border hidden md:inline-flex items-center gap-1 ${sigBadge.badge}`}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+                            <span>{mWorkload.workloadSignal} ({mWorkload.activeAssigned ?? (mWorkload.todo + mWorkload.inProgress)} active)</span>
+                          </span>
+                        );
+                      })()}
+
                       {/* Role Selector or Badge */}
                       {canChangeRole ? (
                         <select

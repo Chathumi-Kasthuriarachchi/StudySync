@@ -500,6 +500,42 @@ const TaskDetailsModal = ({
             >
               {priorityBadge.label}
             </span>
+            {task.status !== 'COMPLETED' && (
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold border bg-powder-50/90 dark:bg-powder-950/70 text-powder-700 dark:text-powder-300 border-powder-200 dark:border-powder-800 flex items-center gap-1">
+                <span className="text-[10px] text-powder-500 uppercase tracking-wider font-semibold">Urgency:</span>
+                <span className="font-extrabold">{(() => {
+                  if (typeof task.urgencyScore === 'number') return task.urgencyScore;
+                  let prio = 15;
+                  if (task.priority === 'URGENT') prio = 35;
+                  else if (task.priority === 'HIGH') prio = 25;
+                  else if (task.priority === 'LOW') prio = 5;
+                  let dead = 0;
+                  if (task.dueDate) {
+                    const now = new Date();
+                    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+                    const endToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                    const dueT = new Date(task.dueDate).getTime();
+                    if (dueT < startToday.getTime()) dead = 45;
+                    else if (dueT <= endToday.getTime()) dead = 38;
+                    else {
+                      const diffD = Math.ceil((dueT - endToday.getTime()) / (24 * 60 * 60 * 1000));
+                      if (diffD <= 1) dead = 30;
+                      else if (diffD <= 2) dead = 24;
+                      else if (diffD <= 3) dead = 18;
+                      else if (diffD <= 7) dead = 10;
+                      else dead = 5;
+                    }
+                  }
+                  const subList = Array.isArray(task.subtasks) ? task.subtasks : [];
+                  let progVal = 0;
+                  if (subList.length > 0) progVal = Math.round((subList.filter(s => s.completed).length / subList.length) * 100);
+                  else if (task.status === 'IN_PROGRESS') progVal = 50;
+                  const incomp = Math.round(((100 - progVal) / 100) * 15);
+                  const statW = task.status === 'IN_PROGRESS' ? 5 : 0;
+                  return Math.min(100, Math.max(0, prio + dead + incomp + statW));
+                })()}/100</span>
+              </span>
+            )}
             {isPersonal ? (
               <span className="px-2.5 py-0.5 rounded-full text-xs font-bold border bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 flex items-center gap-1">
                 <Sparkles className="w-3 h-3" />
