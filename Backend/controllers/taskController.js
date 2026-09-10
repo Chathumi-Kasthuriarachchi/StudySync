@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Task = require("../models/Task");
+const Goal = require("../models/Goal");
 const Project = require("../models/Project");
 const ProjectMembership = require("../models/ProjectMembership");
 const TaskActivity = require("../models/TaskActivity");
@@ -37,6 +38,8 @@ const createTask = async (req, res) => {
             tags,
             subtasks,
             estimatedMinutes,
+            goal,
+            isMilestone,
         } = req.body;
 
         if (!title || title.trim().length === 0) {
@@ -66,6 +69,25 @@ const createTask = async (req, res) => {
                 success: false,
                 message: "Due date cannot be earlier than start date",
             });
+        }
+
+        // Validate Goal if provided
+        let goalId = null;
+        if (goal) {
+            if (!mongoose.Types.ObjectId.isValid(goal)) {
+                return res.status(400).json({ success: false, message: "Invalid goal ID format" });
+            }
+            const goalDoc = await Goal.findById(goal);
+            if (!goalDoc) {
+                return res.status(404).json({ success: false, message: "Goal not found" });
+            }
+            if (!goalDoc.project || !goalDoc.project.equals(projectId)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Task project must match goal project (cannot link personal goal to project task)",
+                });
+            }
+            goalId = goalDoc._id;
         }
 
         // Validate Assignee if provided
@@ -117,6 +139,7 @@ const createTask = async (req, res) => {
 
         const task = await Task.create({
             project: projectId,
+            goal: goalId,
             title: title.trim(),
             description: description ? description.trim() : "",
             status: status || "TODO",
@@ -128,10 +151,12 @@ const createTask = async (req, res) => {
             tags: formattedTags,
             subtasks: formattedSubtasks,
             estimatedMinutes: parsedEstimatedMinutes,
+            isMilestone: Boolean(isMilestone),
         });
 
         const populatedTask = await Task.findById(task._id)
             .populate("project", "_id name status dueDate owner")
+            .populate("goal", "_id title status measurementType targetValue")
             .populate("assignee", "_id name email profileImageURL")
             .populate("createdBy", "_id name email profileImageURL");
 
@@ -213,6 +238,7 @@ const getProjectTasks = async (req, res) => {
         }
 
         const tasks = await Task.find(filter)
+            .populate("goal", "_id title status measurementType targetValue")
             .populate("assignee", "_id name email profileImageURL")
             .populate("createdBy", "_id name email profileImageURL")
             .sort(sortOptions);
@@ -341,6 +367,7 @@ const getMyTasks = async (req, res) => {
 
         const tasks = await Task.find(query)
             .populate('project', '_id name status dueDate')
+            .populate('goal', '_id title status measurementType targetValue')
             .populate('assignee', '_id name email profileImageURL')
             .populate('createdBy', '_id name email profileImageURL')
             .sort({ dueDate: 1, createdAt: -1 });
@@ -371,6 +398,7 @@ const getTaskById = async (req, res) => {
     try {
         const task = await Task.findById(req.task._id)
             .populate("project", "_id name status dueDate owner")
+            .populate("goal", "_id title status measurementType targetValue")
             .populate("assignee", "_id name email profileImageURL")
             .populate("createdBy", "_id name email profileImageURL");
 
@@ -435,6 +463,8 @@ const updateTask = async (req, res) => {
             dueDate,
             tags,
             estimatedMinutes,
+            goal,
+            isMilestone,
         } = req.body;
 
         if (title !== undefined) {
@@ -541,10 +571,49 @@ const updateTask = async (req, res) => {
             }
         }
 
+        // Goal update
+        if (goal !== undefined) {
+            if (goal === null || goal === "") {
+                task.goal = null;
+            } else {
+                if (!mongoose.Types.ObjectId.isValid(goal)) {
+                    return res.status(400).json({ success: false, message: "Invalid goal ID format" });
+                }
+                const goalDoc = await Goal.findById(goal);
+                if (!goalDoc) {
+                    return res.status(404).json({ success: false, message: "Goal not found" });
+                }
+
+                if (!task.project) {
+                    // Personal task: goal must be personal and owned by user
+                    if (goalDoc.project || !goalDoc.owner.equals(req.user._id)) {
+                        return res.status(400).json({
+                            success: false,
+                            message: "Cannot link project goal to personal task",
+                        });
+                    }
+                } else {
+                    // Project task: goal must be in same project
+                    if (!goalDoc.project || !goalDoc.project.equals(task.project)) {
+                        return res.status(400).json({
+                            success: false,
+                            message: "Task project must match goal project",
+                        });
+                    }
+                }
+                task.goal = goalDoc._id;
+            }
+        }
+
+        if (isMilestone !== undefined) {
+            task.isMilestone = Boolean(isMilestone);
+        }
+
         await task.save();
 
         const updated = await Task.findById(task._id)
             .populate("project", "_id name status dueDate owner")
+            .populate("goal", "_id title status measurementType targetValue")
             .populate("assignee", "_id name email profileImageURL")
             .populate("createdBy", "_id name email profileImageURL");
 
@@ -917,6 +986,8 @@ const createPersonalTask = async (req, res) => {
             tags,
             subtasks,
             estimatedMinutes,
+            goal,
+            isMilestone,
         } = req.body;
 
         if (!title || title.trim().length === 0) {
@@ -926,6 +997,7 @@ const createPersonalTask = async (req, res) => {
             });
         }
 
+        // Validate dates if provided
         let start = null;
         let due = null;
         if (startDate) {
@@ -945,6 +1017,25 @@ const createPersonalTask = async (req, res) => {
                 success: false,
                 message: 'Due date cannot be earlier than start date',
             });
+        }
+
+        // Validate Goal if provided
+        let goalId = null;
+        if (goal) {
+            if (!mongoose.Types.ObjectId.isValid(goal)) {
+                return res.status(400).json({ success: false, message: 'Invalid goal ID format' });
+            }
+            const goalDoc = await Goal.findById(goal);
+            if (!goalDoc) {
+                return res.status(404).json({ success: false, message: 'Goal not found' });
+            }
+            if (goalDoc.project || !goalDoc.owner.equals(req.user._id)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Cannot link project goal to personal task',
+                });
+            }
+            goalId = goalDoc._id;
         }
 
         const formattedSubtasks = Array.isArray(subtasks)
@@ -972,6 +1063,7 @@ const createPersonalTask = async (req, res) => {
 
         const task = new Task({
             project: null,
+            goal: goalId,
             title: title.trim(),
             description: description ? description.trim() : '',
             status: status || 'TODO',
@@ -983,6 +1075,7 @@ const createPersonalTask = async (req, res) => {
             tags: formattedTags,
             subtasks: formattedSubtasks,
             estimatedMinutes: parsedEstimatedMinutes,
+            isMilestone: Boolean(isMilestone),
         });
 
         if (task.subtasks.length > 0 && !status) {
@@ -992,6 +1085,7 @@ const createPersonalTask = async (req, res) => {
         await task.save();
 
         const populatedTask = await Task.findById(task._id)
+            .populate('goal', '_id title status measurementType targetValue')
             .populate('assignee', '_id name email profileImageURL')
             .populate('createdBy', '_id name email profileImageURL');
 
@@ -1056,6 +1150,7 @@ const getPersonalTasks = async (req, res) => {
         }
 
         const tasks = await Task.find(filter)
+            .populate('goal', '_id title status measurementType targetValue')
             .populate('assignee', '_id name email profileImageURL')
             .populate('createdBy', '_id name email profileImageURL')
             .sort(sortOptions);
@@ -1125,6 +1220,7 @@ const getDashboardSummary = async (req, res) => {
 
         const allTasks = await Task.find(baseCondition)
             .populate('project', '_id name status dueDate')
+            .populate('goal', '_id title status measurementType targetValue')
             .populate('assignee', '_id name email profileImageURL')
             .populate('createdBy', '_id name email profileImageURL')
             .sort({ dueDate: 1, createdAt: -1 });

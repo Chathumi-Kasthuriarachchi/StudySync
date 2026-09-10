@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Task = require("../models/Task");
+const Goal = require("../models/Goal");
 const Meeting = require("../models/Meeting");
 const ProjectMembership = require("../models/ProjectMembership");
 const { calculateTaskUrgency } = require("../services/taskIntelligenceService");
@@ -130,7 +131,39 @@ const normalizeMeeting = (meeting) => {
 };
 
 /**
- * @desc    Get unified calendar events (tasks + meetings)
+ * Normalize a goal's target date into a deadline calendar item
+ */
+const normalizeGoalDeadline = (goal) => {
+    return {
+        id: `goal_${goal._id}`,
+        sourceType: "goal_deadline",
+        sourceId: goal._id,
+        title: `🎯 ${goal.title}`,
+        description: goal.description || "",
+        start: goal.targetDate,
+        end: goal.targetDate,
+        allDay: true,
+        category: goal.project ? "PROJECT" : "PERSONAL",
+        project: goal.project ? { _id: goal.project._id, name: goal.project.name } : null,
+        status: goal.status,
+        priority: "HIGH",
+        assignee: null,
+        organizer: null,
+        participants: [],
+        meetingLink: null,
+        location: null,
+        deadlineClassification: null,
+        urgencyScore: null,
+        isAtRisk: false,
+        reasons: [],
+        progress: null,
+        measurementType: goal.measurementType,
+        targetValue: goal.targetValue,
+    };
+};
+
+/**
+ * @desc    Get unified calendar events (tasks + meetings + goal deadlines)
  * @route   GET /api/calendar
  * @access  Protected
  */
@@ -295,6 +328,42 @@ const getCalendarEvents = async (req, res) => {
 
             for (const meeting of meetings) {
                 calendarItems.push(normalizeMeeting(meeting));
+            }
+        }
+
+        // ─── GOAL DEADLINES ───────────────────────────────────────────────────────
+        if (includeType === "ALL" || includeType === "GOALS" || includeType === "DEADLINES") {
+            const goalOrConditions = [];
+
+            if (includeScope === "ALL" || includeScope === "PERSONAL") {
+                goalOrConditions.push({ project: null, owner: userId });
+            }
+
+            if (includeScope === "ALL" || includeScope === "PROJECT") {
+                const memberships = await ProjectMembership.find({ user: userId }).select("project");
+                const userProjectIds = memberships.map((m) => m.project);
+
+                if (projectId && mongoose.Types.ObjectId.isValid(projectId)) {
+                    if (userProjectIds.some((pid) => pid.toString() === projectId)) {
+                        goalOrConditions.push({ project: new mongoose.Types.ObjectId(projectId) });
+                    }
+                } else if (userProjectIds.length > 0) {
+                    goalOrConditions.push({ project: { $in: userProjectIds } });
+                }
+            }
+
+            if (goalOrConditions.length > 0) {
+                const goalQuery = {
+                    $and: [
+                        { $or: goalOrConditions },
+                        { targetDate: { $gte: rangeStart, $lte: rangeEnd } },
+                    ],
+                };
+
+                const goals = await Goal.find(goalQuery).populate("project", "_id name");
+                for (const goal of goals) {
+                    calendarItems.push(normalizeGoalDeadline(goal));
+                }
             }
         }
 
