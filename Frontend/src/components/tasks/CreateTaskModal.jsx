@@ -42,6 +42,7 @@ const CreateTaskModal = ({
   const [startDate, setStartDate] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [tagsInput, setTagsInput] = useState('');
+  const [estimatedMinutes, setEstimatedMinutes] = useState('');
   const [subtasks, setSubtasks] = useState([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
 
@@ -162,6 +163,7 @@ const CreateTaskModal = ({
           dueDate: dueDate || null,
           tags,
           subtasks,
+          estimatedMinutes: estimatedMinutes !== '' ? Math.max(0, Number(estimatedMinutes)) : null,
         });
       } else {
         const targetProjectId = isFixedProject ? projectId : selectedProjectId;
@@ -181,6 +183,7 @@ const CreateTaskModal = ({
           dueDate: dueDate || null,
           tags,
           subtasks,
+          estimatedMinutes: estimatedMinutes !== '' ? Math.max(0, Number(estimatedMinutes)) : null,
         });
       }
 
@@ -196,6 +199,7 @@ const CreateTaskModal = ({
         setStartDate('');
         setDueDate('');
         setTagsInput('');
+        setEstimatedMinutes('');
         setSubtasks([]);
       }
     } catch (err) {
@@ -417,19 +421,36 @@ const CreateTaskModal = ({
             </div>
           </div>
 
-          {/* Tags */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-              <Tag className="w-3.5 h-3.5 text-powder-500" />
-              <span>Tags <span className="text-[10px] font-normal text-slate-400 lowercase">(comma separated)</span></span>
-            </label>
-            <input
-              type="text"
-              value={tagsInput}
-              onChange={(e) => setTagsInput(e.target.value)}
-              placeholder="e.g. personal, revision, exam"
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs focus:outline-hidden focus:ring-2 focus:ring-powder-500/30 transition"
-            />
+          {/* Tags & Estimated Time Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                <Tag className="w-3.5 h-3.5 text-powder-500" />
+                <span>Tags <span className="text-[10px] font-normal text-slate-400 lowercase">(comma separated)</span></span>
+              </label>
+              <input
+                type="text"
+                value={tagsInput}
+                onChange={(e) => setTagsInput(e.target.value)}
+                placeholder="e.g. personal, revision, exam"
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs focus:outline-hidden focus:ring-2 focus:ring-powder-500/30 transition"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-amber-500" />
+                <span>Estimated Time <span className="text-[10px] font-normal text-slate-400 lowercase">(minutes)</span></span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={estimatedMinutes}
+                onChange={(e) => setEstimatedMinutes(e.target.value)}
+                placeholder="e.g. 60 (1 hr), 120 (2 hrs)"
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs focus:outline-hidden focus:ring-2 focus:ring-powder-500/30 transition"
+              />
+            </div>
           </div>
 
           {/* Subtasks Checklist Builder */}
