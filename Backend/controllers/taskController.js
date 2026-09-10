@@ -36,6 +36,7 @@ const createTask = async (req, res) => {
             dueDate,
             tags,
             subtasks,
+            estimatedMinutes,
         } = req.body;
 
         if (!title || title.trim().length === 0) {
@@ -104,6 +105,16 @@ const createTask = async (req, res) => {
             ? tags.map((t) => String(t).trim()).filter(Boolean)
             : [];
 
+        // Validate estimatedMinutes if provided
+        let parsedEstimatedMinutes = null;
+        if (estimatedMinutes !== undefined && estimatedMinutes !== null && estimatedMinutes !== "") {
+            const num = Number(estimatedMinutes);
+            if (isNaN(num) || num < 0) {
+                return res.status(400).json({ success: false, message: "Estimated minutes must be a positive number" });
+            }
+            parsedEstimatedMinutes = Math.round(num);
+        }
+
         const task = await Task.create({
             project: projectId,
             title: title.trim(),
@@ -116,6 +127,7 @@ const createTask = async (req, res) => {
             dueDate: due,
             tags: formattedTags,
             subtasks: formattedSubtasks,
+            estimatedMinutes: parsedEstimatedMinutes,
         });
 
         const populatedTask = await Task.findById(task._id)
@@ -422,6 +434,7 @@ const updateTask = async (req, res) => {
             startDate,
             dueDate,
             tags,
+            estimatedMinutes,
         } = req.body;
 
         if (title !== undefined) {
@@ -514,6 +527,18 @@ const updateTask = async (req, res) => {
 
         if (tags !== undefined && Array.isArray(tags)) {
             task.tags = tags.map((t) => String(t).trim()).filter(Boolean);
+        }
+
+        if (estimatedMinutes !== undefined) {
+            if (estimatedMinutes === null || estimatedMinutes === "") {
+                task.estimatedMinutes = null;
+            } else {
+                const num = Number(estimatedMinutes);
+                if (isNaN(num) || num < 0) {
+                    return res.status(400).json({ success: false, message: "Estimated minutes must be a positive number" });
+                }
+                task.estimatedMinutes = Math.round(num);
+            }
         }
 
         await task.save();
@@ -891,6 +916,7 @@ const createPersonalTask = async (req, res) => {
             dueDate,
             tags,
             subtasks,
+            estimatedMinutes,
         } = req.body;
 
         if (!title || title.trim().length === 0) {
@@ -935,6 +961,15 @@ const createPersonalTask = async (req, res) => {
             ? tags.map((t) => String(t).trim()).filter(Boolean)
             : [];
 
+        let parsedEstimatedMinutes = null;
+        if (estimatedMinutes !== undefined && estimatedMinutes !== null && estimatedMinutes !== "") {
+            const num = Number(estimatedMinutes);
+            if (isNaN(num) || num < 0) {
+                return res.status(400).json({ success: false, message: "Estimated minutes must be a positive number" });
+            }
+            parsedEstimatedMinutes = Math.round(num);
+        }
+
         const task = new Task({
             project: null,
             title: title.trim(),
@@ -947,6 +982,7 @@ const createPersonalTask = async (req, res) => {
             dueDate: due,
             tags: formattedTags,
             subtasks: formattedSubtasks,
+            estimatedMinutes: parsedEstimatedMinutes,
         });
 
         if (task.subtasks.length > 0 && !status) {

@@ -78,6 +78,11 @@ const taskSchema = new mongoose.Schema(
             },
         ],
         subtasks: [subtaskSchema],
+        estimatedMinutes: {
+            type: Number,
+            min: [0, "Estimated minutes cannot be negative"],
+            default: null,
+        },
     },
     {
         timestamps: true,
