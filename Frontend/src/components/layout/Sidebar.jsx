@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   CheckSquare,
   FolderKanban,
+  Target,
   Calendar,
   Timer,
   BarChart3,
@@ -151,6 +152,13 @@ const Sidebar = ({
               to="/projects"
               icon={FolderKanban}
               label="Projects"
+              isCollapsed={isCollapsed}
+              onClick={handleNavClick}
+            />
+            <NavItem
+              to="/goals"
+              icon={Target}
+              label="Goals"
               isCollapsed={isCollapsed}
               onClick={handleNavClick}
             />

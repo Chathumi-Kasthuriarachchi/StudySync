@@ -18,11 +18,13 @@ import {
   RefreshCw,
   Timer,
   Play,
+  Target,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTimeTracking, formatHumanTime } from '../context/TimeTrackingContext';
 import { getDashboardSummary, updateTaskStatus } from '../services/taskService';
 import { getTodayFocusSummary } from '../services/timeService';
+import { getGoals } from '../services/goalService';
 import CreateTaskModal from '../components/tasks/CreateTaskModal';
 import TaskDetailsModal from '../components/tasks/TaskDetailsModal';
 import MiniCalendar from '../components/calendar/MiniCalendar';
@@ -209,6 +211,7 @@ const Dashboard = () => {
   // Dashboard API data state
   const [dashboardData, setDashboardData] = useState(null);
   const [todayFocus, setTodayFocus] = useState(null);
+  const [recentGoals, setRecentGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [warningToast, setWarningToast] = useState(null);
@@ -248,9 +251,17 @@ const Dashboard = () => {
     try {
       setLoading(true);
       setError('');
-      const res = await getDashboardSummary();
-      if (res.success && res.data) {
-        setDashboardData(res.data);
+      const [summaryRes, goalsRes] = await Promise.allSettled([
+        getDashboardSummary(),
+        getGoals({ status: 'IN_PROGRESS' }),
+      ]);
+
+      if (summaryRes.status === 'fulfilled' && summaryRes.value?.success && summaryRes.value?.data) {
+        setDashboardData(summaryRes.value.data);
+      }
+
+      if (goalsRes.status === 'fulfilled' && goalsRes.value?.goals) {
+        setRecentGoals(goalsRes.value.goals);
       }
     } catch (err) {
       console.error('getDashboardSummary error:', err);
@@ -981,6 +992,63 @@ const Dashboard = () => {
 
           {/* Mini Calendar Widget */}
           <MiniCalendar />
+
+          {/* Goals in Progress Widget (Phase 10) */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                  <Target className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900 dark:text-white leading-tight">Active Goals</h2>
+                  <span className="text-[10px] text-slate-400 font-medium">Outcome tracking</span>
+                </div>
+              </div>
+              <Link
+                to="/goals"
+                className="text-[11px] font-bold text-powder-600 dark:text-powder-400 hover:underline flex items-center gap-0.5"
+              >
+                <span>View All</span>
+                <ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
+
+            {recentGoals.length === 0 ? (
+              <div className="text-center py-3.5 px-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-700">
+                <p className="text-xs text-slate-500">No goals in progress</p>
+                <Link
+                  to="/goals"
+                  className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline mt-1 inline-block"
+                >
+                  Create a Goal
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {recentGoals.slice(0, 3).map((goal) => (
+                  <Link
+                    key={goal._id}
+                    to={`/goals/${goal._id}`}
+                    className="block p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-100 dark:border-slate-800 transition group"
+                  >
+                    <div className="flex items-center justify-between text-xs font-semibold mb-1.5">
+                      <span className="truncate max-w-[160px] text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                        {goal.title}
+                      </span>
+                      <span className="text-slate-500 dark:text-slate-400 text-[11px] font-bold">{goal.progress || 0}%</span>
+                    </div>
+                    <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                        style={{ width: `${goal.progress || 0}%` }}
+                      />
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Quick Actions Panel */}
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs">

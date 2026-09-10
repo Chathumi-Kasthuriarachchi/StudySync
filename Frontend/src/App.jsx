@@ -22,6 +22,8 @@ import Projects from './pages/Projects';
 import ProjectDetails from './pages/ProjectDetails';
 import Calendar from './pages/Calendar';
 import Focus from './pages/Focus';
+import Goals from './pages/Goals';
+import GoalDetails from './pages/GoalDetails';
 import Analytics from './pages/Analytics';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
@@ -74,6 +76,8 @@ const App = () => {
                 <Route path="/tasks" element={<Tasks />} />
                 <Route path="/projects" element={<Projects />} />
                 <Route path="/projects/:id" element={<ProjectDetails />} />
+                <Route path="/goals" element={<Goals />} />
+                <Route path="/goals/:id" element={<GoalDetails />} />
                 <Route path="/calendar" element={<Calendar />} />
                 <Route path="/focus" element={<Focus />} />
                 <Route path="/analytics" element={<Analytics />} />

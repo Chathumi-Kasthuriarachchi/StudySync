@@ -629,6 +629,28 @@ const TaskDetailsModal = ({
                 {task.project.name || 'Project Task'}
               </span>
             ) : null}
+
+            {task.goal && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  navigate(`/goals/${task.goal._id || task.goal}`);
+                }}
+                className="px-2.5 py-0.5 rounded-full text-xs font-bold border bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 flex items-center gap-1 hover:bg-blue-100 transition cursor-pointer"
+                title="View Goal Details"
+              >
+                <Target className="w-3 h-3" />
+                <span>{task.goal.title || 'Linked Goal'}</span>
+              </button>
+            )}
+
+            {task.isMilestone && (
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold border bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 flex items-center gap-1">
+                <Flag className="w-3 h-3" />
+                Milestone
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -946,6 +968,25 @@ const TaskDetailsModal = ({
                     <p className="font-semibold text-slate-800 dark:text-slate-200 truncate">
                       {task.project.name || 'Project'}
                     </p>
+                  </div>
+                )}
+
+                {/* Goal Context */}
+                {task.goal && (
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                      <Target className="w-3 h-3 text-blue-500" /> Goal
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        navigate(`/goals/${task.goal._id || task.goal}`);
+                      }}
+                      className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 truncate text-left cursor-pointer"
+                    >
+                      <span>{task.goal.title || 'View Goal'}</span>
+                    </button>
                   </div>
                 )}
 
