@@ -2,7 +2,6 @@ import React from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   Menu,
-  Bell,
   Sun,
   Moon,
   Sparkles,
@@ -10,6 +9,7 @@ import {
   PanelLeftOpen,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import NotificationBell from '../notifications/NotificationBell';
 
 /**
  * Page titles map based on current pathname
@@ -18,9 +18,11 @@ const ROUTE_TITLES = {
   '/dashboard': { title: 'Dashboard', subtitle: 'Overview & daily focus' },
   '/tasks': { title: 'My Tasks', subtitle: 'Organize and track your action items' },
   '/projects': { title: 'Projects', subtitle: 'Workspaces and team deliverables' },
+  '/goals': { title: 'Goals & Milestones', subtitle: 'Outcomes, progress metrics & deliverables' },
   '/calendar': { title: 'Calendar', subtitle: 'Schedule and upcoming deadlines' },
   '/focus': { title: 'Focus Mode', subtitle: 'Deep work & distraction-free sessions' },
   '/analytics': { title: 'Analytics', subtitle: 'Productivity metrics & progress trends' },
+  '/notifications': { title: 'Notifications', subtitle: 'Alerts, updates, assignments & mentions' },
   '/profile': { title: 'Profile', subtitle: 'Personal information & account credentials' },
   '/settings': { title: 'Settings', subtitle: 'Preferences, workspace & theme settings' },
 };
@@ -122,17 +124,8 @@ const TopBar = ({
             )}
           </button>
 
-          {/* Notifications Placeholder */}
-          <button
-            type="button"
-            aria-label="Notifications (placeholder)"
-            title="Notifications (coming soon)"
-            className="relative p-2 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-          >
-            <Bell className="w-5 h-5" />
-            {/* Unread indicator dot */}
-            <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-powder-500 ring-2 ring-white dark:ring-slate-900" />
-          </button>
+          {/* Notifications Bell with Popover Dropdown */}
+          <NotificationBell />
 
           {/* User Quick Info */}
           <div className="flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-slate-800">

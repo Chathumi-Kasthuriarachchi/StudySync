@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Comment = require("../models/Comment");
 const TaskActivity = require("../models/TaskActivity");
 const { logTaskActivity } = require("../utils/activityLogger");
+const notificationService = require("../services/notificationService");
 
 /**
  * getTaskComments
@@ -77,6 +78,13 @@ const createTaskComment = async (req, res) => {
             details: `${req.user.name || "A member"} added a comment: "${snippet}"`,
             metadata: { commentId: newComment._id },
         });
+
+        // Trigger notifications for task assignee/creator and @mentions
+        try {
+            await notificationService.notifyCommentAndMentions(populated, task, req.user._id);
+        } catch (notifErr) {
+            console.error("Failed to dispatch comment notification:", notifErr);
+        }
 
         return res.status(201).json({
             success: true,

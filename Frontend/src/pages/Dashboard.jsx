@@ -16,11 +16,18 @@ import {
   MessageSquare,
   Sparkles,
   RefreshCw,
+  Timer,
+  Play,
+  Target,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useTimeTracking, formatHumanTime } from '../context/TimeTrackingContext';
 import { getDashboardSummary, updateTaskStatus } from '../services/taskService';
+import { getTodayFocusSummary } from '../services/timeService';
+import { getGoals } from '../services/goalService';
 import CreateTaskModal from '../components/tasks/CreateTaskModal';
 import TaskDetailsModal from '../components/tasks/TaskDetailsModal';
+import MiniCalendar from '../components/calendar/MiniCalendar';
 
 /**
  * Priority badge styling helper
@@ -199,12 +206,30 @@ const getActivityMeta = (action) => {
  */
 const Dashboard = () => {
   const { user } = useAuth();
+  const { activeSession, isTracking, formattedElapsed, stopTimer } = useTimeTracking();
 
   // Dashboard API data state
   const [dashboardData, setDashboardData] = useState(null);
+  const [todayFocus, setTodayFocus] = useState(null);
+  const [recentGoals, setRecentGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [warningToast, setWarningToast] = useState(null);
+
+  const fetchTodaySummary = useCallback(async () => {
+    try {
+      const res = await getTodayFocusSummary();
+      if (res.success && res.data) {
+        setTodayFocus(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to load today focus summary:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchTodaySummary();
+  }, [fetchTodaySummary, isTracking]);
 
   // Active tab in main tasks card: 'dueToday' | 'upcoming'
   const [activeTaskTab, setActiveTaskTab] = useState('dueToday');
@@ -226,9 +251,17 @@ const Dashboard = () => {
     try {
       setLoading(true);
       setError('');
-      const res = await getDashboardSummary();
-      if (res.success && res.data) {
-        setDashboardData(res.data);
+      const [summaryRes, goalsRes] = await Promise.allSettled([
+        getDashboardSummary(),
+        getGoals({ status: 'IN_PROGRESS' }),
+      ]);
+
+      if (summaryRes.status === 'fulfilled' && summaryRes.value?.success && summaryRes.value?.data) {
+        setDashboardData(summaryRes.value.data);
+      }
+
+      if (goalsRes.status === 'fulfilled' && goalsRes.value?.goals) {
+        setRecentGoals(goalsRes.value.goals);
       }
     } catch (err) {
       console.error('getDashboardSummary error:', err);
@@ -880,6 +913,143 @@ const Dashboard = () => {
 
         {/* Right 1 Column: Quick Actions & Account Info */}
         <div className="space-y-6">
+          {/* Today's Focus Card (Phase 9) */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Timer className="w-4 h-4 text-powder-500" />
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                  Today's Focus
+                </h2>
+              </div>
+              {isTracking && (
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" title="Timer active" />
+              )}
+            </div>
+
+            {/* Currently focusing state */}
+            {isTracking ? (
+              <div className="p-3.5 rounded-2xl bg-powder-50/80 dark:bg-powder-950/60 border border-powder-200/80 dark:border-powder-800/80 space-y-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-powder-600 dark:text-powder-400 block">
+                  Currently focusing on
+                </span>
+                <p className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
+                  {activeSession?.task?.title || 'Active Task'}
+                </p>
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-sm font-mono font-bold text-powder-700 dark:text-powder-300">
+                    {formattedElapsed}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <Link
+                      to="/focus"
+                      className="px-2.5 py-1 rounded-lg bg-powder-600 hover:bg-powder-700 text-white text-[11px] font-bold shadow-2xs transition"
+                    >
+                      Focus
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await stopTimer();
+                        fetchTodaySummary();
+                      }}
+                      className="px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-[11px] font-bold transition"
+                      title="Stop timer"
+                    >
+                      Stop
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Compact daily statistics */
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Tracked</span>
+                  <span className="text-sm font-extrabold text-slate-800 dark:text-slate-100">
+                    {formatHumanTime(todayFocus?.totalTrackedMinutes || 0)}
+                  </span>
+                </div>
+                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Sessions</span>
+                  <span className="text-sm font-extrabold text-slate-800 dark:text-slate-100">
+                    {todayFocus?.sessionsCount || 0}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {!isTracking && (
+              <Link
+                to="/focus"
+                className="w-full py-2 px-4 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-powder-50 dark:hover:bg-powder-950/40 border border-slate-200/80 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:text-powder-700 dark:hover:text-powder-300 text-xs font-bold transition flex items-center justify-center gap-1.5"
+              >
+                <Play className="w-3.5 h-3.5 fill-current text-powder-500" />
+                <span>Start Focus</span>
+              </Link>
+            )}
+          </div>
+
+          {/* Mini Calendar Widget */}
+          <MiniCalendar />
+
+          {/* Goals in Progress Widget (Phase 10) */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                  <Target className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900 dark:text-white leading-tight">Active Goals</h2>
+                  <span className="text-[10px] text-slate-400 font-medium">Outcome tracking</span>
+                </div>
+              </div>
+              <Link
+                to="/goals"
+                className="text-[11px] font-bold text-powder-600 dark:text-powder-400 hover:underline flex items-center gap-0.5"
+              >
+                <span>View All</span>
+                <ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
+
+            {recentGoals.length === 0 ? (
+              <div className="text-center py-3.5 px-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-700">
+                <p className="text-xs text-slate-500">No goals in progress</p>
+                <Link
+                  to="/goals"
+                  className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline mt-1 inline-block"
+                >
+                  Create a Goal
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {recentGoals.slice(0, 3).map((goal) => (
+                  <Link
+                    key={goal._id}
+                    to={`/goals/${goal._id}`}
+                    className="block p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-100 dark:border-slate-800 transition group"
+                  >
+                    <div className="flex items-center justify-between text-xs font-semibold mb-1.5">
+                      <span className="truncate max-w-[160px] text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                        {goal.title}
+                      </span>
+                      <span className="text-slate-500 dark:text-slate-400 text-[11px] font-bold">{goal.progress || 0}%</span>
+                    </div>
+                    <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                        style={{ width: `${goal.progress || 0}%` }}
+                      />
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Quick Actions Panel */}
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs">
             <h2 className="text-base font-bold text-slate-900 dark:text-white mb-3">

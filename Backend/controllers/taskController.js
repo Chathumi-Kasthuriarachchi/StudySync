@@ -1,10 +1,13 @@
 const mongoose = require("mongoose");
 const Task = require("../models/Task");
+const Goal = require("../models/Goal");
 const Project = require("../models/Project");
 const ProjectMembership = require("../models/ProjectMembership");
 const TaskActivity = require("../models/TaskActivity");
 const { logTaskActivity } = require("../utils/activityLogger");
 const taskIntelligenceService = require("../services/taskIntelligenceService");
+const notificationService = require("../services/notificationService");
+const goalService = require("../services/goalService");
 
 /**
  * createTask
@@ -36,6 +39,10 @@ const createTask = async (req, res) => {
             dueDate,
             tags,
             subtasks,
+            estimatedMinutes,
+            goal,
+            isMilestone,
+            dependencies,
         } = req.body;
 
         if (!title || title.trim().length === 0) {
@@ -65,6 +72,25 @@ const createTask = async (req, res) => {
                 success: false,
                 message: "Due date cannot be earlier than start date",
             });
+        }
+
+        // Validate Goal if provided
+        let goalId = null;
+        if (goal) {
+            if (!mongoose.Types.ObjectId.isValid(goal)) {
+                return res.status(400).json({ success: false, message: "Invalid goal ID format" });
+            }
+            const goalDoc = await Goal.findById(goal);
+            if (!goalDoc) {
+                return res.status(404).json({ success: false, message: "Goal not found" });
+            }
+            if (!goalDoc.project || !goalDoc.project.equals(projectId)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Task project must match goal project (cannot link personal goal to project task)",
+                });
+            }
+            goalId = goalDoc._id;
         }
 
         // Validate Assignee if provided
@@ -104,8 +130,23 @@ const createTask = async (req, res) => {
             ? tags.map((t) => String(t).trim()).filter(Boolean)
             : [];
 
+        // Validate estimatedMinutes if provided
+        let parsedEstimatedMinutes = null;
+        if (estimatedMinutes !== undefined && estimatedMinutes !== null && estimatedMinutes !== "") {
+            const num = Number(estimatedMinutes);
+            if (isNaN(num) || num < 0) {
+                return res.status(400).json({ success: false, message: "Estimated minutes must be a positive number" });
+            }
+            parsedEstimatedMinutes = Math.round(num);
+        }
+
+        const formattedDeps = Array.isArray(dependencies)
+            ? dependencies.filter((d) => mongoose.Types.ObjectId.isValid(d))
+            : [];
+
         const task = await Task.create({
             project: projectId,
+            goal: goalId,
             title: title.trim(),
             description: description ? description.trim() : "",
             status: status || "TODO",
@@ -116,10 +157,15 @@ const createTask = async (req, res) => {
             dueDate: due,
             tags: formattedTags,
             subtasks: formattedSubtasks,
+            estimatedMinutes: parsedEstimatedMinutes,
+            isMilestone: Boolean(isMilestone),
+            dependencies: formattedDeps,
         });
 
         const populatedTask = await Task.findById(task._id)
             .populate("project", "_id name status dueDate owner")
+            .populate("goal", "_id title status measurementType targetValue")
+            .populate("dependencies", "_id title status")
             .populate("assignee", "_id name email profileImageURL")
             .populate("createdBy", "_id name email profileImageURL");
 
@@ -130,6 +176,11 @@ const createTask = async (req, res) => {
             action: "CREATED",
             details: `${req.user.name || "A member"} created this task`,
         });
+
+        // Notify assigned user if assigned to someone else
+        if (assigneeId) {
+            await notificationService.notifyTaskAssigned(populatedTask, req.user._id);
+        }
 
         return res.status(201).json({
             success: true,
@@ -201,6 +252,7 @@ const getProjectTasks = async (req, res) => {
         }
 
         const tasks = await Task.find(filter)
+            .populate("goal", "_id title status measurementType targetValue")
             .populate("assignee", "_id name email profileImageURL")
             .populate("createdBy", "_id name email profileImageURL")
             .sort(sortOptions);
@@ -329,6 +381,7 @@ const getMyTasks = async (req, res) => {
 
         const tasks = await Task.find(query)
             .populate('project', '_id name status dueDate')
+            .populate('goal', '_id title status measurementType targetValue')
             .populate('assignee', '_id name email profileImageURL')
             .populate('createdBy', '_id name email profileImageURL')
             .sort({ dueDate: 1, createdAt: -1 });
@@ -359,6 +412,8 @@ const getTaskById = async (req, res) => {
     try {
         const task = await Task.findById(req.task._id)
             .populate("project", "_id name status dueDate owner")
+            .populate("goal", "_id title status measurementType targetValue")
+            .populate("dependencies", "_id title status")
             .populate("assignee", "_id name email profileImageURL")
             .populate("createdBy", "_id name email profileImageURL");
 
@@ -413,6 +468,9 @@ const updateTask = async (req, res) => {
             });
         }
 
+        const prevStatus = task.status;
+        const prevAssignee = task.assignee ? task.assignee.toString() : null;
+
         const {
             title,
             description,
@@ -422,6 +480,10 @@ const updateTask = async (req, res) => {
             startDate,
             dueDate,
             tags,
+            estimatedMinutes,
+            goal,
+            isMilestone,
+            dependencies,
         } = req.body;
 
         if (title !== undefined) {
@@ -516,10 +578,70 @@ const updateTask = async (req, res) => {
             task.tags = tags.map((t) => String(t).trim()).filter(Boolean);
         }
 
+        if (estimatedMinutes !== undefined) {
+            if (estimatedMinutes === null || estimatedMinutes === "") {
+                task.estimatedMinutes = null;
+            } else {
+                const num = Number(estimatedMinutes);
+                if (isNaN(num) || num < 0) {
+                    return res.status(400).json({ success: false, message: "Estimated minutes must be a positive number" });
+                }
+                task.estimatedMinutes = Math.round(num);
+            }
+        }
+
+        // Goal update
+        if (goal !== undefined) {
+            if (goal === null || goal === "") {
+                task.goal = null;
+            } else {
+                if (!mongoose.Types.ObjectId.isValid(goal)) {
+                    return res.status(400).json({ success: false, message: "Invalid goal ID format" });
+                }
+                const goalDoc = await Goal.findById(goal);
+                if (!goalDoc) {
+                    return res.status(404).json({ success: false, message: "Goal not found" });
+                }
+
+                if (!task.project) {
+                    // Personal task: goal must be personal and owned by user
+                    if (goalDoc.project || !goalDoc.owner.equals(req.user._id)) {
+                        return res.status(400).json({
+                            success: false,
+                            message: "Cannot link project goal to personal task",
+                        });
+                    }
+                } else {
+                    // Project task: goal must be in same project
+                    if (!goalDoc.project || !goalDoc.project.equals(task.project)) {
+                        return res.status(400).json({
+                            success: false,
+                            message: "Task project must match goal project",
+                        });
+                    }
+                }
+                task.goal = goalDoc._id;
+            }
+        }
+
+        if (isMilestone !== undefined) {
+            task.isMilestone = Boolean(isMilestone);
+        }
+
+        if (dependencies !== undefined) {
+            task.dependencies = Array.isArray(dependencies)
+                ? dependencies
+                    .map((d) => (typeof d === "object" && d?._id ? d._id : d))
+                    .filter((id) => mongoose.Types.ObjectId.isValid(id) && id.toString() !== task._id.toString())
+                : [];
+        }
+
         await task.save();
 
         const updated = await Task.findById(task._id)
             .populate("project", "_id name status dueDate owner")
+            .populate("goal", "_id title status measurementType targetValue")
+            .populate("dependencies", "_id title status")
             .populate("assignee", "_id name email profileImageURL")
             .populate("createdBy", "_id name email profileImageURL");
 
@@ -530,6 +652,29 @@ const updateTask = async (req, res) => {
             action: "UPDATED",
             details: `${req.user.name || "A member"} updated task details`,
         });
+
+        // Check if assignee changed
+        const newAssigneeStr = updated.assignee?._id ? updated.assignee._id.toString() : null;
+        if (newAssigneeStr && newAssigneeStr !== prevAssignee) {
+            await notificationService.notifyTaskAssigned(updated, req.user._id);
+        }
+
+        // Check if completed
+        if (prevStatus !== "COMPLETED" && updated.status === "COMPLETED") {
+            await notificationService.notifyTaskCompleted(updated, req.user._id);
+            await notificationService.checkAndNotifyDependenciesUnblocked(updated, req.user._id);
+            if (updated.goal) {
+                try {
+                    const goalDoc = await Goal.findById(updated.goal._id || updated.goal);
+                    if (goalDoc) {
+                        const progress = await goalService.calculateGoalProgress(goalDoc._id);
+                        await notificationService.notifyGoalProgress(goalDoc, progress);
+                    }
+                } catch (gErr) {
+                    console.error("Goal notification error on updateTask:", gErr);
+                }
+            }
+        }
 
         return res.status(200).json({
             success: true,
@@ -600,6 +745,8 @@ const updateTaskStatus = async (req, res) => {
 
         const updated = await Task.findById(task._id)
             .populate("project", "_id name status dueDate owner")
+            .populate("goal", "_id title status measurementType targetValue")
+            .populate("dependencies", "_id title status")
             .populate("assignee", "_id name email profileImageURL")
             .populate("createdBy", "_id name email profileImageURL");
 
@@ -611,6 +758,22 @@ const updateTaskStatus = async (req, res) => {
             details: `${req.user.name || "A member"} changed status to ${newStatus}`,
             metadata: { prevStatus, newStatus },
         });
+
+        if (prevStatus !== "COMPLETED" && newStatus === "COMPLETED") {
+            await notificationService.notifyTaskCompleted(updated, req.user._id);
+            await notificationService.checkAndNotifyDependenciesUnblocked(updated, req.user._id);
+            if (updated.goal) {
+                try {
+                    const goalDoc = await Goal.findById(updated.goal._id || updated.goal);
+                    if (goalDoc) {
+                        const progress = await goalService.calculateGoalProgress(goalDoc._id);
+                        await notificationService.notifyGoalProgress(goalDoc, progress);
+                    }
+                } catch (gErr) {
+                    console.error("Goal notification error on updateTaskStatus:", gErr);
+                }
+            }
+        }
 
         return res.status(200).json({
             success: true,
@@ -767,11 +930,14 @@ const toggleSubtask = async (req, res) => {
             activityDetails = `${req.user.name || "A member"} marked subtask "${subtask.title}" as ${subtask.completed ? "completed" : "incomplete"}`;
         }
 
+        const prevTaskStatus = task.status;
         syncTaskStatusFromSubtasks(task);
         await task.save();
 
         const updated = await Task.findById(task._id)
             .populate("project", "_id name status dueDate owner")
+            .populate("goal", "_id title status measurementType targetValue")
+            .populate("dependencies", "_id title status")
             .populate("assignee", "_id name email profileImageURL")
             .populate("createdBy", "_id name email profileImageURL");
 
@@ -784,6 +950,22 @@ const toggleSubtask = async (req, res) => {
                 details: activityDetails,
                 metadata: { subtaskId: subtask._id, completed: subtask.completed },
             });
+        }
+
+        if (prevTaskStatus !== "COMPLETED" && updated.status === "COMPLETED") {
+            await notificationService.notifyTaskCompleted(updated, req.user._id);
+            await notificationService.checkAndNotifyDependenciesUnblocked(updated, req.user._id);
+            if (updated.goal) {
+                try {
+                    const goalDoc = await Goal.findById(updated.goal._id || updated.goal);
+                    if (goalDoc) {
+                        const progress = await goalService.calculateGoalProgress(goalDoc._id);
+                        await notificationService.notifyGoalProgress(goalDoc, progress);
+                    }
+                } catch (gErr) {
+                    console.error("Goal notification error on toggleSubtask:", gErr);
+                }
+            }
         }
 
         return res.status(200).json({
@@ -891,6 +1073,9 @@ const createPersonalTask = async (req, res) => {
             dueDate,
             tags,
             subtasks,
+            estimatedMinutes,
+            goal,
+            isMilestone,
         } = req.body;
 
         if (!title || title.trim().length === 0) {
@@ -900,6 +1085,7 @@ const createPersonalTask = async (req, res) => {
             });
         }
 
+        // Validate dates if provided
         let start = null;
         let due = null;
         if (startDate) {
@@ -921,6 +1107,25 @@ const createPersonalTask = async (req, res) => {
             });
         }
 
+        // Validate Goal if provided
+        let goalId = null;
+        if (goal) {
+            if (!mongoose.Types.ObjectId.isValid(goal)) {
+                return res.status(400).json({ success: false, message: 'Invalid goal ID format' });
+            }
+            const goalDoc = await Goal.findById(goal);
+            if (!goalDoc) {
+                return res.status(404).json({ success: false, message: 'Goal not found' });
+            }
+            if (goalDoc.project || !goalDoc.owner.equals(req.user._id)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Cannot link project goal to personal task',
+                });
+            }
+            goalId = goalDoc._id;
+        }
+
         const formattedSubtasks = Array.isArray(subtasks)
             ? subtasks
                   .filter((st) => st && st.title && st.title.trim().length > 0)
@@ -935,8 +1140,18 @@ const createPersonalTask = async (req, res) => {
             ? tags.map((t) => String(t).trim()).filter(Boolean)
             : [];
 
+        let parsedEstimatedMinutes = null;
+        if (estimatedMinutes !== undefined && estimatedMinutes !== null && estimatedMinutes !== "") {
+            const num = Number(estimatedMinutes);
+            if (isNaN(num) || num < 0) {
+                return res.status(400).json({ success: false, message: "Estimated minutes must be a positive number" });
+            }
+            parsedEstimatedMinutes = Math.round(num);
+        }
+
         const task = new Task({
             project: null,
+            goal: goalId,
             title: title.trim(),
             description: description ? description.trim() : '',
             status: status || 'TODO',
@@ -947,6 +1162,8 @@ const createPersonalTask = async (req, res) => {
             dueDate: due,
             tags: formattedTags,
             subtasks: formattedSubtasks,
+            estimatedMinutes: parsedEstimatedMinutes,
+            isMilestone: Boolean(isMilestone),
         });
 
         if (task.subtasks.length > 0 && !status) {
@@ -956,6 +1173,7 @@ const createPersonalTask = async (req, res) => {
         await task.save();
 
         const populatedTask = await Task.findById(task._id)
+            .populate('goal', '_id title status measurementType targetValue')
             .populate('assignee', '_id name email profileImageURL')
             .populate('createdBy', '_id name email profileImageURL');
 
@@ -1020,6 +1238,7 @@ const getPersonalTasks = async (req, res) => {
         }
 
         const tasks = await Task.find(filter)
+            .populate('goal', '_id title status measurementType targetValue')
             .populate('assignee', '_id name email profileImageURL')
             .populate('createdBy', '_id name email profileImageURL')
             .sort(sortOptions);
@@ -1089,6 +1308,7 @@ const getDashboardSummary = async (req, res) => {
 
         const allTasks = await Task.find(baseCondition)
             .populate('project', '_id name status dueDate')
+            .populate('goal', '_id title status measurementType targetValue')
             .populate('assignee', '_id name email profileImageURL')
             .populate('createdBy', '_id name email profileImageURL')
             .sort({ dueDate: 1, createdAt: -1 });

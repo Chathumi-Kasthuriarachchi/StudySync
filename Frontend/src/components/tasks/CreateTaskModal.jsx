@@ -8,12 +8,14 @@ import {
   Tag,
   User,
   Flag,
+  Target,
   CheckSquare,
   FolderKanban,
   Sparkles,
 } from 'lucide-react';
 import { createTask, createPersonalTask } from '../../services/taskService';
 import { getProjects, getProjectMembers } from '../../services/projectService';
+import { getGoals } from '../../services/goalService';
 
 /**
  * CreateTaskModal
@@ -42,6 +44,10 @@ const CreateTaskModal = ({
   const [startDate, setStartDate] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [tagsInput, setTagsInput] = useState('');
+  const [estimatedMinutes, setEstimatedMinutes] = useState('');
+  const [goalId, setGoalId] = useState('');
+  const [isMilestone, setIsMilestone] = useState(false);
+  const [availableGoals, setAvailableGoals] = useState([]);
   const [subtasks, setSubtasks] = useState([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
 
@@ -109,6 +115,30 @@ const CreateTaskModal = ({
     }
   }, [isOpen, isFixedProject, taskType, selectedProjectId]);
 
+  // Fetch available goals based on context
+  useEffect(() => {
+    if (isOpen) {
+      const fetchRelevantGoals = async () => {
+        try {
+          const currentProjId = isFixedProject ? projectId : selectedProjectId;
+          const params = taskType === 'PERSONAL'
+            ? { scope: 'personal' }
+            : currentProjId ? { project: currentProjId } : null;
+
+          if (params) {
+            const res = await getGoals(params);
+            setAvailableGoals(res.goals || []);
+          } else {
+            setAvailableGoals([]);
+          }
+        } catch (err) {
+          console.error('Failed to load goals for task modal:', err);
+        }
+      };
+      fetchRelevantGoals();
+    }
+  }, [isOpen, taskType, isFixedProject, projectId, selectedProjectId]);
+
   if (!isOpen) return null;
 
   const handleAddSubtask = (e) => {
@@ -162,6 +192,9 @@ const CreateTaskModal = ({
           dueDate: dueDate || null,
           tags,
           subtasks,
+          estimatedMinutes: estimatedMinutes !== '' ? Math.max(0, Number(estimatedMinutes)) : null,
+          goal: goalId || null,
+          isMilestone: Boolean(isMilestone),
         });
       } else {
         const targetProjectId = isFixedProject ? projectId : selectedProjectId;
@@ -181,6 +214,9 @@ const CreateTaskModal = ({
           dueDate: dueDate || null,
           tags,
           subtasks,
+          estimatedMinutes: estimatedMinutes !== '' ? Math.max(0, Number(estimatedMinutes)) : null,
+          goal: goalId || null,
+          isMilestone: Boolean(isMilestone),
         });
       }
 
@@ -196,6 +232,9 @@ const CreateTaskModal = ({
         setStartDate('');
         setDueDate('');
         setTagsInput('');
+        setEstimatedMinutes('');
+        setGoalId('');
+        setIsMilestone(false);
         setSubtasks([]);
       }
     } catch (err) {
@@ -417,19 +456,71 @@ const CreateTaskModal = ({
             </div>
           </div>
 
-          {/* Tags */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-              <Tag className="w-3.5 h-3.5 text-powder-500" />
-              <span>Tags <span className="text-[10px] font-normal text-slate-400 lowercase">(comma separated)</span></span>
+          {/* Tags & Estimated Time Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                <Tag className="w-3.5 h-3.5 text-powder-500" />
+                <span>Tags <span className="text-[10px] font-normal text-slate-400 lowercase">(comma separated)</span></span>
+              </label>
+              <input
+                type="text"
+                value={tagsInput}
+                onChange={(e) => setTagsInput(e.target.value)}
+                placeholder="e.g. personal, revision, exam"
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs focus:outline-hidden focus:ring-2 focus:ring-powder-500/30 transition"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-amber-500" />
+                <span>Estimated Time <span className="text-[10px] font-normal text-slate-400 lowercase">(minutes)</span></span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={estimatedMinutes}
+                onChange={(e) => setEstimatedMinutes(e.target.value)}
+                placeholder="e.g. 60 (1 hr), 120 (2 hrs)"
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs focus:outline-hidden focus:ring-2 focus:ring-powder-500/30 transition"
+              />
+            </div>
+          </div>
+
+          {/* Goal & Milestone Section */}
+          <div className="space-y-3 p-3.5 rounded-2xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                <Target className="w-3.5 h-3.5 text-blue-500" />
+                <span>Link to Goal (Optional)</span>
+              </label>
+              <select
+                value={goalId}
+                onChange={(e) => setGoalId(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-semibold focus:outline-hidden focus:ring-2 focus:ring-blue-500/30 transition"
+              >
+                <option value="">None (Standalone Task)</option>
+                {availableGoals.map((g) => (
+                  <option key={g._id} value={g._id}>
+                    🎯 {g.title} ({g.measurementType})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer pt-1">
+              <input
+                type="checkbox"
+                checked={isMilestone}
+                onChange={(e) => setIsMilestone(e.target.checked)}
+                className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-slate-300 dark:border-slate-600"
+              />
+              <span className="text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                <Flag className="w-3.5 h-3.5 text-purple-500" />
+                <span>Mark as key milestone deliverable</span>
+              </span>
             </label>
-            <input
-              type="text"
-              value={tagsInput}
-              onChange={(e) => setTagsInput(e.target.value)}
-              placeholder="e.g. personal, revision, exam"
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs focus:outline-hidden focus:ring-2 focus:ring-powder-500/30 transition"
-            />
           </div>
 
           {/* Subtasks Checklist Builder */}

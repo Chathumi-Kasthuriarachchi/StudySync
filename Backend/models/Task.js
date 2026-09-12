@@ -24,6 +24,12 @@ const taskSchema = new mongoose.Schema(
             ref: "Project",
             default: null,
         },
+        goal: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Goal",
+            default: null,
+            index: true,
+        },
         title: {
             type: String,
             required: [true, "Task title is required"],
@@ -78,6 +84,21 @@ const taskSchema = new mongoose.Schema(
             },
         ],
         subtasks: [subtaskSchema],
+        estimatedMinutes: {
+            type: Number,
+            min: [0, "Estimated minutes cannot be negative"],
+            default: null,
+        },
+        isMilestone: {
+            type: Boolean,
+            default: false,
+        },
+        dependencies: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "Task",
+            },
+        ],
     },
     {
         timestamps: true,
@@ -115,5 +136,6 @@ taskSchema.index({ assignee: 1, status: 1 });
 taskSchema.index({ project: 1, priority: 1 });
 taskSchema.index({ createdBy: 1, project: 1 });
 taskSchema.index({ createdBy: 1, status: 1 });
+taskSchema.index({ goal: 1, status: 1 });
 
 module.exports = mongoose.model("Task", taskSchema);

@@ -9,6 +9,11 @@ const projectRoutes = require("./routes/projectRoutes");
 const taskRoutes = require("./routes/taskRoutes");
 const userRoutes = require("./routes/userRoutes");
 const reportRoutes = require("./routes/reportRoutes");
+const meetingRoutes = require("./routes/meetingRoutes");
+const calendarRoutes = require("./routes/calendarRoutes");
+const timeRoutes = require("./routes/timeRoutes");
+const goalRoutes = require("./routes/goalRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
 
 const app = express();
 
@@ -63,6 +68,11 @@ app.use("/api/projects", projectRoutes);
 app.use("/api/tasks", taskRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/meetings", meetingRoutes);
+app.use("/api/calendar", calendarRoutes);
+app.use("/api/time", timeRoutes);
+app.use("/api/goals", goalRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // Global 404 handler for unknown routes
 app.use((req, res) => {
