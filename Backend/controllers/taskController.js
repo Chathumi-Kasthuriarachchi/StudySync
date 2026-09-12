@@ -6,6 +6,8 @@ const ProjectMembership = require("../models/ProjectMembership");
 const TaskActivity = require("../models/TaskActivity");
 const { logTaskActivity } = require("../utils/activityLogger");
 const taskIntelligenceService = require("../services/taskIntelligenceService");
+const notificationService = require("../services/notificationService");
+const goalService = require("../services/goalService");
 
 /**
  * createTask
@@ -40,6 +42,7 @@ const createTask = async (req, res) => {
             estimatedMinutes,
             goal,
             isMilestone,
+            dependencies,
         } = req.body;
 
         if (!title || title.trim().length === 0) {
@@ -137,6 +140,10 @@ const createTask = async (req, res) => {
             parsedEstimatedMinutes = Math.round(num);
         }
 
+        const formattedDeps = Array.isArray(dependencies)
+            ? dependencies.filter((d) => mongoose.Types.ObjectId.isValid(d))
+            : [];
+
         const task = await Task.create({
             project: projectId,
             goal: goalId,
@@ -152,11 +159,13 @@ const createTask = async (req, res) => {
             subtasks: formattedSubtasks,
             estimatedMinutes: parsedEstimatedMinutes,
             isMilestone: Boolean(isMilestone),
+            dependencies: formattedDeps,
         });
 
         const populatedTask = await Task.findById(task._id)
             .populate("project", "_id name status dueDate owner")
             .populate("goal", "_id title status measurementType targetValue")
+            .populate("dependencies", "_id title status")
             .populate("assignee", "_id name email profileImageURL")
             .populate("createdBy", "_id name email profileImageURL");
 
@@ -167,6 +176,11 @@ const createTask = async (req, res) => {
             action: "CREATED",
             details: `${req.user.name || "A member"} created this task`,
         });
+
+        // Notify assigned user if assigned to someone else
+        if (assigneeId) {
+            await notificationService.notifyTaskAssigned(populatedTask, req.user._id);
+        }
 
         return res.status(201).json({
             success: true,
@@ -399,6 +413,7 @@ const getTaskById = async (req, res) => {
         const task = await Task.findById(req.task._id)
             .populate("project", "_id name status dueDate owner")
             .populate("goal", "_id title status measurementType targetValue")
+            .populate("dependencies", "_id title status")
             .populate("assignee", "_id name email profileImageURL")
             .populate("createdBy", "_id name email profileImageURL");
 
@@ -453,6 +468,9 @@ const updateTask = async (req, res) => {
             });
         }
 
+        const prevStatus = task.status;
+        const prevAssignee = task.assignee ? task.assignee.toString() : null;
+
         const {
             title,
             description,
@@ -465,6 +483,7 @@ const updateTask = async (req, res) => {
             estimatedMinutes,
             goal,
             isMilestone,
+            dependencies,
         } = req.body;
 
         if (title !== undefined) {
@@ -609,11 +628,20 @@ const updateTask = async (req, res) => {
             task.isMilestone = Boolean(isMilestone);
         }
 
+        if (dependencies !== undefined) {
+            task.dependencies = Array.isArray(dependencies)
+                ? dependencies
+                    .map((d) => (typeof d === "object" && d?._id ? d._id : d))
+                    .filter((id) => mongoose.Types.ObjectId.isValid(id) && id.toString() !== task._id.toString())
+                : [];
+        }
+
         await task.save();
 
         const updated = await Task.findById(task._id)
             .populate("project", "_id name status dueDate owner")
             .populate("goal", "_id title status measurementType targetValue")
+            .populate("dependencies", "_id title status")
             .populate("assignee", "_id name email profileImageURL")
             .populate("createdBy", "_id name email profileImageURL");
 
@@ -624,6 +652,29 @@ const updateTask = async (req, res) => {
             action: "UPDATED",
             details: `${req.user.name || "A member"} updated task details`,
         });
+
+        // Check if assignee changed
+        const newAssigneeStr = updated.assignee?._id ? updated.assignee._id.toString() : null;
+        if (newAssigneeStr && newAssigneeStr !== prevAssignee) {
+            await notificationService.notifyTaskAssigned(updated, req.user._id);
+        }
+
+        // Check if completed
+        if (prevStatus !== "COMPLETED" && updated.status === "COMPLETED") {
+            await notificationService.notifyTaskCompleted(updated, req.user._id);
+            await notificationService.checkAndNotifyDependenciesUnblocked(updated, req.user._id);
+            if (updated.goal) {
+                try {
+                    const goalDoc = await Goal.findById(updated.goal._id || updated.goal);
+                    if (goalDoc) {
+                        const progress = await goalService.calculateGoalProgress(goalDoc._id);
+                        await notificationService.notifyGoalProgress(goalDoc, progress);
+                    }
+                } catch (gErr) {
+                    console.error("Goal notification error on updateTask:", gErr);
+                }
+            }
+        }
 
         return res.status(200).json({
             success: true,
@@ -694,6 +745,8 @@ const updateTaskStatus = async (req, res) => {
 
         const updated = await Task.findById(task._id)
             .populate("project", "_id name status dueDate owner")
+            .populate("goal", "_id title status measurementType targetValue")
+            .populate("dependencies", "_id title status")
             .populate("assignee", "_id name email profileImageURL")
             .populate("createdBy", "_id name email profileImageURL");
 
@@ -705,6 +758,22 @@ const updateTaskStatus = async (req, res) => {
             details: `${req.user.name || "A member"} changed status to ${newStatus}`,
             metadata: { prevStatus, newStatus },
         });
+
+        if (prevStatus !== "COMPLETED" && newStatus === "COMPLETED") {
+            await notificationService.notifyTaskCompleted(updated, req.user._id);
+            await notificationService.checkAndNotifyDependenciesUnblocked(updated, req.user._id);
+            if (updated.goal) {
+                try {
+                    const goalDoc = await Goal.findById(updated.goal._id || updated.goal);
+                    if (goalDoc) {
+                        const progress = await goalService.calculateGoalProgress(goalDoc._id);
+                        await notificationService.notifyGoalProgress(goalDoc, progress);
+                    }
+                } catch (gErr) {
+                    console.error("Goal notification error on updateTaskStatus:", gErr);
+                }
+            }
+        }
 
         return res.status(200).json({
             success: true,
@@ -861,11 +930,14 @@ const toggleSubtask = async (req, res) => {
             activityDetails = `${req.user.name || "A member"} marked subtask "${subtask.title}" as ${subtask.completed ? "completed" : "incomplete"}`;
         }
 
+        const prevTaskStatus = task.status;
         syncTaskStatusFromSubtasks(task);
         await task.save();
 
         const updated = await Task.findById(task._id)
             .populate("project", "_id name status dueDate owner")
+            .populate("goal", "_id title status measurementType targetValue")
+            .populate("dependencies", "_id title status")
             .populate("assignee", "_id name email profileImageURL")
             .populate("createdBy", "_id name email profileImageURL");
 
@@ -878,6 +950,22 @@ const toggleSubtask = async (req, res) => {
                 details: activityDetails,
                 metadata: { subtaskId: subtask._id, completed: subtask.completed },
             });
+        }
+
+        if (prevTaskStatus !== "COMPLETED" && updated.status === "COMPLETED") {
+            await notificationService.notifyTaskCompleted(updated, req.user._id);
+            await notificationService.checkAndNotifyDependenciesUnblocked(updated, req.user._id);
+            if (updated.goal) {
+                try {
+                    const goalDoc = await Goal.findById(updated.goal._id || updated.goal);
+                    if (goalDoc) {
+                        const progress = await goalService.calculateGoalProgress(goalDoc._id);
+                        await notificationService.notifyGoalProgress(goalDoc, progress);
+                    }
+                } catch (gErr) {
+                    console.error("Goal notification error on toggleSubtask:", gErr);
+                }
+            }
         }
 
         return res.status(200).json({

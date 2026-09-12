@@ -15,8 +15,10 @@ import {
   ChevronRight,
   X,
   ShieldAlert,
+  Bell,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationContext';
 import NavItem from '../navigation/NavItem';
 
 /**
@@ -36,6 +38,7 @@ const Sidebar = ({
   onCloseMobile,
 }) => {
   const { user, logout } = useAuth();
+  const { unreadCount } = useNotifications();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -173,6 +176,14 @@ const Sidebar = ({
               to="/focus"
               icon={Timer}
               label="Focus Mode"
+              isCollapsed={isCollapsed}
+              onClick={handleNavClick}
+            />
+            <NavItem
+              to="/notifications"
+              icon={Bell}
+              label="Notifications"
+              badge={unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : undefined}
               isCollapsed={isCollapsed}
               onClick={handleNavClick}
             />

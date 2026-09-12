@@ -596,9 +596,22 @@ const unlinkTaskFromGoal = async (goalId, taskId, userId) => {
     };
 };
 
+/**
+ * Helper to calculate goal progress given a goal ID or goal document
+ */
+const calculateGoalProgress = async (goalIdOrDoc) => {
+    const goal = typeof goalIdOrDoc === "object" && goalIdOrDoc._id
+        ? goalIdOrDoc
+        : await Goal.findById(goalIdOrDoc);
+    if (!goal) return { progress: 0 };
+    const tasks = await Task.find({ goal: goal._id });
+    return await computeGoalProgress(goal, tasks);
+};
+
 module.exports = {
     verifyGoalAccess,
     computeGoalProgress,
+    calculateGoalProgress,
     createGoal,
     getGoalById,
     listGoals,
