@@ -14,6 +14,7 @@ const calendarRoutes = require("./routes/calendarRoutes");
 const timeRoutes = require("./routes/timeRoutes");
 const goalRoutes = require("./routes/goalRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
+const analyticsRoutes = require("./routes/analyticsRoutes");
 
 const app = express();
 
@@ -73,6 +74,7 @@ app.use("/api/calendar", calendarRoutes);
 app.use("/api/time", timeRoutes);
 app.use("/api/goals", goalRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/analytics", analyticsRoutes);
 
 // Global 404 handler for unknown routes
 app.use((req, res) => {
