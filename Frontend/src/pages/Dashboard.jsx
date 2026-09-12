@@ -19,12 +19,28 @@ import {
   Timer,
   Play,
   Target,
+  BarChart3,
+  TrendingUp,
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  Tooltip as RechartsTooltip,
+} from 'recharts';
 import { useAuth } from '../context/AuthContext';
 import { useTimeTracking, formatHumanTime } from '../context/TimeTrackingContext';
 import { getDashboardSummary, updateTaskStatus } from '../services/taskService';
 import { getTodayFocusSummary } from '../services/timeService';
 import { getGoals } from '../services/goalService';
+import { getPersonalAnalytics } from '../services/analyticsService';
 import CreateTaskModal from '../components/tasks/CreateTaskModal';
 import TaskDetailsModal from '../components/tasks/TaskDetailsModal';
 import MiniCalendar from '../components/calendar/MiniCalendar';
@@ -212,6 +228,7 @@ const Dashboard = () => {
   const [dashboardData, setDashboardData] = useState(null);
   const [todayFocus, setTodayFocus] = useState(null);
   const [recentGoals, setRecentGoals] = useState([]);
+  const [analyticsData, setAnalyticsData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [warningToast, setWarningToast] = useState(null);
@@ -246,14 +263,15 @@ const Dashboard = () => {
     return () => clearTimeout(timer);
   }, [warningToast]);
 
-  // ── Fetch Dashboard Summary ─────────────────────────────────────────────────
+  // ── Fetch Dashboard Summary & Analytics ─────────────────────────────────────
   const fetchDashboard = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
-      const [summaryRes, goalsRes] = await Promise.allSettled([
+      const [summaryRes, goalsRes, analyticsRes] = await Promise.allSettled([
         getDashboardSummary(),
         getGoals({ status: 'IN_PROGRESS' }),
+        getPersonalAnalytics({ period: 'this_week' }),
       ]);
 
       if (summaryRes.status === 'fulfilled' && summaryRes.value?.success && summaryRes.value?.data) {
@@ -262,6 +280,10 @@ const Dashboard = () => {
 
       if (goalsRes.status === 'fulfilled' && goalsRes.value?.goals) {
         setRecentGoals(goalsRes.value.goals);
+      }
+
+      if (analyticsRes.status === 'fulfilled' && analyticsRes.value?.success && analyticsRes.value?.data) {
+        setAnalyticsData(analyticsRes.value.data);
       }
     } catch (err) {
       console.error('getDashboardSummary error:', err);
@@ -406,97 +428,362 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* 2. Productivity Metric Stat Cards (Live API Data) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-        {/* Card 1: My Tasks */}
-        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs hover:border-powder-300 dark:hover:border-powder-800 transition group">
+      {/* 2. Productivity Metric Stat Cards (Enhanced Phase 12 Analytics) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        {/* Card 1: Tasks Completed */}
+        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-4 shadow-xs hover:border-mint-300 dark:hover:border-mint-800 transition group">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              My Tasks
-            </span>
-            <div className="w-9 h-9 rounded-2xl bg-powder-50 dark:bg-powder-950/60 text-powder-600 dark:text-powder-400 flex items-center justify-center">
-              <CheckSquare className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-slate-900 dark:text-white">
-              {loading ? '—' : metrics.totalTasks}
-            </span>
-            <span className="text-xs text-slate-400 dark:text-slate-500">
-              {loading ? 'loading...' : `${metrics.todoCount} to do · ${metrics.inProgressCount} in progress`}
-            </span>
-          </div>
-          <div className="mt-3 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 group-hover:text-powder-600 dark:group-hover:text-powder-400 transition">
-            <Link to="/tasks" className="flex items-center gap-1 font-semibold">
-              <span>View all tasks</span>
-              <ArrowRight className="w-3 h-3" />
-            </Link>
-          </div>
-        </div>
-
-        {/* Card 2: Due Today */}
-        <div
-          className={`bg-white dark:bg-slate-900 rounded-3xl border p-5 shadow-xs transition group ${
-            metrics.dueTodayCount > 0
-              ? 'border-amber-300/80 dark:border-amber-800/80 bg-amber-50/20 dark:bg-amber-950/10'
-              : 'border-slate-200 dark:border-slate-800 hover:border-amber-300 dark:hover:border-amber-800'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Due Today
-              </span>
-              {metrics.dueTodayCount > 0 && (
-                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-              )}
-            </div>
-            <div className="w-9 h-9 rounded-2xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-              <Clock className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-slate-900 dark:text-white">
-              {loading ? '—' : metrics.dueTodayCount}
-            </span>
-            <span className="text-xs text-slate-400 dark:text-slate-500">
-              {loading ? 'loading...' : `${metrics.dueTodayCount === 1 ? '1 item' : `${metrics.dueTodayCount} items`} scheduled`}
-            </span>
-          </div>
-          <div className="mt-3 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition">
-            <Link to="/tasks?due=today" className="flex items-center gap-1 font-semibold text-amber-700 dark:text-amber-300">
-              <span>View due today tasks</span>
-              <ArrowRight className="w-3 h-3" />
-            </Link>
-          </div>
-        </div>
-
-        {/* Card 3: Completed */}
-        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs hover:border-mint-300 dark:hover:border-mint-800 transition group">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
               Completed
             </span>
-            <div className="w-9 h-9 rounded-2xl bg-mint-50 dark:bg-mint-950/60 text-mint-600 dark:text-mint-400 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-mint-50 dark:bg-mint-950/60 text-mint-600 dark:text-mint-400 flex items-center justify-center">
               <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-slate-900 dark:text-white">
-              {loading ? '—' : metrics.completedCount}
+          <div className="mt-2.5 flex items-baseline gap-1.5">
+            <span className="text-2xl font-extrabold text-slate-900 dark:text-white">
+              {loading ? '—' : (analyticsData?.taskMetrics?.completed ?? metrics.completedCount)}
             </span>
-            <span className="text-xs text-slate-400 dark:text-slate-500">
-              {loading ? 'loading...' : `${metrics.completedThisWeek} finished this week`}
+            <span className="text-[11px] text-slate-400 dark:text-slate-500 truncate">
+              {loading ? '' : `of ${metrics.totalTasks}`}
             </span>
           </div>
-          <div className="mt-3 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 group-hover:text-mint-600 dark:group-hover:text-mint-400 transition">
-            <Link to="/tasks?status=COMPLETED" className="flex items-center gap-1 font-semibold">
-              <span>View completed tasks</span>
-              <ArrowRight className="w-3 h-3" />
-            </Link>
+          <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400 truncate">
+            {metrics.completedThisWeek} finished this week
+          </div>
+        </div>
+
+        {/* Card 2: Completion Rate */}
+        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-4 shadow-xs hover:border-powder-300 dark:hover:border-powder-800 transition group">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Completion Rate
+            </span>
+            <div className="w-8 h-8 rounded-xl bg-powder-50 dark:bg-powder-950/60 text-powder-600 dark:text-powder-400 flex items-center justify-center">
+              <TrendingUp className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-2.5 flex items-baseline gap-1.5">
+            <span className="text-2xl font-extrabold text-slate-900 dark:text-white">
+              {loading
+                ? '—'
+                : `${
+                    analyticsData?.taskMetrics?.completionPercentage ??
+                    (metrics.totalTasks > 0
+                      ? Math.round((metrics.completedCount / metrics.totalTasks) * 100)
+                      : 0)
+                  }%`}
+            </span>
+          </div>
+          <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+            <div
+              className="bg-gradient-to-r from-powder-500 to-mint-400 h-full rounded-full transition-all duration-500"
+              style={{
+                width: `${
+                  analyticsData?.taskMetrics?.completionPercentage ??
+                  (metrics.totalTasks > 0
+                    ? Math.round((metrics.completedCount / metrics.totalTasks) * 100)
+                    : 0)
+                }%`,
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Card 3: Overdue Tasks */}
+        <div
+          className={`bg-white dark:bg-slate-900 rounded-3xl border p-4 shadow-xs transition group ${
+            metrics.overdueCount > 0
+              ? 'border-rose-300/80 dark:border-rose-800/80 bg-rose-50/10 dark:bg-rose-950/10'
+              : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                Overdue
+              </span>
+              {metrics.overdueCount > 0 && (
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+              )}
+            </div>
+            <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+              <AlertCircle className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-2.5 flex items-baseline gap-1.5">
+            <span className="text-2xl font-extrabold text-slate-900 dark:text-white">
+              {loading ? '—' : metrics.overdueCount}
+            </span>
+            <span className="text-[11px] text-slate-400 dark:text-slate-500 truncate">
+              {metrics.overdueCount === 1 ? 'task needs action' : 'tasks need action'}
+            </span>
+          </div>
+          <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400 truncate">
+            {metrics.overdueCount > 0 ? 'Urgent attention' : 'Deadlines on track'}
+          </div>
+        </div>
+
+        {/* Card 4: Focus Time */}
+        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-4 shadow-xs hover:border-indigo-300 dark:hover:border-indigo-800 transition group">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Focus Time
+            </span>
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+              <Timer className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-2.5 flex items-baseline gap-1.5">
+            <span className="text-2xl font-extrabold text-slate-900 dark:text-white">
+              {loading
+                ? '—'
+                : analyticsData?.timeMetrics?.totalTrackedHours !== undefined
+                ? `${analyticsData.timeMetrics.totalTrackedHours}h`
+                : `${Math.round(((todayFocus?.totalTrackedSeconds || 0) / 3600) * 10) / 10}h`}
+            </span>
+            <span className="text-[11px] text-slate-400 dark:text-slate-500 truncate">
+              this week
+            </span>
+          </div>
+          <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400 truncate">
+            {todayFocus?.totalTrackedMinutes || 0}m logged today
+          </div>
+        </div>
+
+        {/* Card 5: Active Goals */}
+        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-4 shadow-xs hover:border-amber-300 dark:hover:border-amber-800 transition group col-span-2 sm:col-span-1">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Active Goals
+            </span>
+            <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+              <Target className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-2.5 flex items-baseline gap-1.5">
+            <span className="text-2xl font-extrabold text-slate-900 dark:text-white">
+              {loading
+                ? '—'
+                : (analyticsData?.goalMetrics?.active ?? recentGoals.length)}
+            </span>
+            <span className="text-[11px] text-slate-400 dark:text-slate-500 truncate">
+              in progress
+            </span>
+          </div>
+          <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400 truncate">
+            {recentGoals.length > 0 ? `${recentGoals.length} tracked` : 'Track study goals'}
           </div>
         </div>
       </div>
+
+      {/* ── 3. Weekly Productivity & Distribution Highlights ──────────────── */}
+      {analyticsData && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* Weekly Task Productivity Chart */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Weekly Productivity
+                  </h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-powder-50 dark:bg-powder-950/60 text-powder-700 dark:text-powder-300 border border-powder-200 dark:border-powder-800">
+                    This Week
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                  Daily completed tasks across your workspace
+                </p>
+              </div>
+              <Link
+                to="/analytics"
+                className="text-xs font-semibold text-powder-600 dark:text-powder-400 hover:underline flex items-center gap-1"
+              >
+                <span>Analytics</span>
+                <ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
+
+            <div className="h-44 w-full">
+              {analyticsData.taskMetrics?.completionTrend?.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart
+                    data={analyticsData.taskMetrics.completionTrend.slice(-7)}
+                    margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                  >
+                    <defs>
+                      <linearGradient id="dashPowderGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.4} />
+                        <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="day" stroke="#94a3b8" fontSize={10} tickLine={false} />
+                    <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} allowDecimals={false} />
+                    <RechartsTooltip
+                      content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                          return (
+                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 shadow-md text-xs">
+                              <p className="font-bold text-slate-700 dark:text-slate-200">{label}</p>
+                              <p className="text-powder-600 font-semibold">
+                                {payload[0].value} task{payload[0].value === 1 ? '' : 's'} completed
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="completedCount"
+                      stroke="#0ea5e9"
+                      strokeWidth={2}
+                      fillOpacity={1}
+                      fill="url(#dashPowderGrad)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-xs text-slate-400">
+                  No completion activity this week
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Task Status & Urgency Distribution */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Task Status & Priorities
+                </h3>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                  Current breakdown of your active backlog
+                </p>
+              </div>
+              <Link
+                to="/tasks"
+                className="text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1"
+              >
+                <span>Tasks</span>
+                <ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 items-center">
+              {/* Mini Status Donut */}
+              <div className="h-40 w-full relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={[
+                        { name: 'To Do', value: analyticsData.taskMetrics?.byStatus?.TODO || 0, color: '#94a3b8' },
+                        { name: 'In Progress', value: analyticsData.taskMetrics?.byStatus?.IN_PROGRESS || 0, color: '#0ea5e9' },
+                        { name: 'Completed', value: analyticsData.taskMetrics?.byStatus?.COMPLETED || 0, color: '#10b981' },
+                      ].filter((i) => i.value > 0)}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={36}
+                      outerRadius={56}
+                      paddingAngle={4}
+                      dataKey="value"
+                    >
+                      {[
+                        { color: '#94a3b8' },
+                        { color: '#0ea5e9' },
+                        { color: '#10b981' },
+                      ].map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-xs font-bold text-slate-800 dark:text-white">
+                    {analyticsData.taskMetrics?.total || 0}
+                  </span>
+                  <span className="text-[9px] text-slate-400 uppercase">Tasks</span>
+                </div>
+              </div>
+
+              {/* Priority Bars */}
+              <div className="space-y-2 text-xs">
+                <div>
+                  <div className="flex justify-between text-[11px] mb-0.5 text-slate-600 dark:text-slate-400">
+                    <span className="font-semibold text-rose-600">Urgent</span>
+                    <span>{analyticsData.taskMetrics?.byPriority?.URGENT || 0}</span>
+                  </div>
+                  <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                    <div
+                      className="bg-rose-500 h-full rounded-full"
+                      style={{
+                        width: `${
+                          analyticsData.taskMetrics?.total > 0
+                            ? Math.round(
+                                ((analyticsData.taskMetrics?.byPriority?.URGENT || 0) /
+                                  analyticsData.taskMetrics?.total) *
+                                  100
+                              )
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-[11px] mb-0.5 text-slate-600 dark:text-slate-400">
+                    <span className="font-semibold text-amber-600">High</span>
+                    <span>{analyticsData.taskMetrics?.byPriority?.HIGH || 0}</span>
+                  </div>
+                  <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                    <div
+                      className="bg-amber-500 h-full rounded-full"
+                      style={{
+                        width: `${
+                          analyticsData.taskMetrics?.total > 0
+                            ? Math.round(
+                                ((analyticsData.taskMetrics?.byPriority?.HIGH || 0) /
+                                  analyticsData.taskMetrics?.total) *
+                                  100
+                              )
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-[11px] mb-0.5 text-slate-600 dark:text-slate-400">
+                    <span className="font-semibold text-sky-600">Medium</span>
+                    <span>{analyticsData.taskMetrics?.byPriority?.MEDIUM || 0}</span>
+                  </div>
+                  <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                    <div
+                      className="bg-sky-500 h-full rounded-full"
+                      style={{
+                        width: `${
+                          analyticsData.taskMetrics?.total > 0
+                            ? Math.round(
+                                ((analyticsData.taskMetrics?.byPriority?.MEDIUM || 0) /
+                                  analyticsData.taskMetrics?.total) *
+                                  100
+                              )
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Task Intelligence: What Should I Work on Next? ─────────────────── */}
       <div className="bg-gradient-to-br from-powder-50/40 via-white to-mint-50/30 dark:from-slate-900 dark:via-slate-900/95 dark:to-slate-800/60 rounded-3xl border border-powder-200/70 dark:border-slate-800 p-6 sm:p-7 shadow-xs space-y-5">

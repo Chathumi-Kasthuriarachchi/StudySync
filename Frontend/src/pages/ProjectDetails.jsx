@@ -21,7 +21,23 @@ import {
   TrendingUp,
   AlertCircle,
   RefreshCw,
+  BarChart3,
+  Timer,
+  Target,
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  Tooltip as RechartsTooltip,
+} from 'recharts';
 import {
   getProjectById,
   updateProject,
@@ -33,6 +49,10 @@ import {
   cancelInvitation,
   getProjectWorkload,
 } from '../services/projectService';
+import {
+  getProjectAnalytics,
+  getTeamAnalytics,
+} from '../services/analyticsService';
 import { useAuth } from '../context/AuthContext';
 import { getRoleBadge, getStatusBadge, calculateTimeline } from './Projects';
 import InviteMemberModal from '../components/projects/InviteMemberModal';
@@ -100,6 +120,44 @@ const ProjectDetails = () => {
   // Delete & Leave state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // Analytics State (Phase 12)
+  const [projectAnalytics, setProjectAnalytics] = useState(null);
+  const [teamAnalytics, setTeamAnalytics] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsPeriod, setAnalyticsPeriod] = useState('all');
+  const [teamForbidden, setTeamForbidden] = useState(false);
+
+  const fetchProjectAnalyticsData = useCallback(async (period = analyticsPeriod) => {
+    try {
+      setAnalyticsLoading(true);
+      const [projRes, teamRes] = await Promise.allSettled([
+        getProjectAnalytics(id, { period }),
+        getTeamAnalytics(id, { period }),
+      ]);
+
+      if (projRes.status === 'fulfilled' && projRes.value?.success) {
+        setProjectAnalytics(projRes.value.data);
+      }
+
+      if (teamRes.status === 'fulfilled' && teamRes.value?.success) {
+        setTeamAnalytics(teamRes.value.data);
+        setTeamForbidden(false);
+      } else if (teamRes.status === 'rejected' && teamRes.reason?.response?.status === 403) {
+        setTeamForbidden(true);
+      }
+    } catch (err) {
+      console.error('fetchProjectAnalyticsData error:', err);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, [id, analyticsPeriod]);
+
+  useEffect(() => {
+    if (activeTab === 'analytics') {
+      fetchProjectAnalyticsData(analyticsPeriod);
+    }
+  }, [activeTab, analyticsPeriod, fetchProjectAnalyticsData]);
 
   const fetchProjectData = useCallback(async () => {
     try {
@@ -346,6 +404,7 @@ const ProjectDetails = () => {
           { id: 'tasks', label: 'Tasks', icon: CheckSquare },
           { id: 'timeline', label: 'Timeline', icon: Clock },
           { id: 'members', label: `Members (${members.length})`, icon: Users },
+          { id: 'analytics', label: 'Analytics', icon: BarChart3 },
           { id: 'settings', label: 'Settings', icon: SettingsIcon },
         ].map((tab) => {
           const Icon = tab.icon;
@@ -1099,6 +1158,375 @@ const ProjectDetails = () => {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ── TAB 5: ANALYTICS (Phase 12) ────────────────────────────────────── */}
+      {activeTab === 'analytics' && (
+        <div className="space-y-6 animate-fadeIn">
+          {/* Header & Period Filter */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-xs">
+            <div>
+              <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-powder-600 dark:text-powder-400" />
+                <span>Project & Team Analytics</span>
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Detailed metrics on project completion, time spent, and member contribution.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="inline-flex p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold">
+                {[
+                  { key: 'all', label: 'All Time' },
+                  { key: 'this_month', label: 'This Month' },
+                  { key: 'this_week', label: 'This Week' },
+                  { key: 'last_30_days', label: '30 Days' },
+                ].map((p) => (
+                  <button
+                    key={p.key}
+                    type="button"
+                    onClick={() => setAnalyticsPeriod(p.key)}
+                    className={`px-3 py-1 rounded-lg transition cursor-pointer ${
+                      analyticsPeriod === p.key
+                        ? 'bg-white dark:bg-slate-900 text-powder-600 dark:text-powder-400 shadow-xs'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => fetchProjectAnalyticsData(analyticsPeriod)}
+                disabled={analyticsLoading}
+                title="Refresh analytics"
+                className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                <RefreshCw className={`w-4 h-4 ${analyticsLoading ? 'animate-spin text-powder-600' : ''}`} />
+              </button>
+            </div>
+          </div>
+
+          {/* Project KPI Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            {/* 1. Completion Rate */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-xs">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                Completion Rate
+              </span>
+              <p className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">
+                {analyticsLoading ? '—' : `${projectAnalytics?.taskMetrics?.completionPercentage ?? 0}%`}
+              </p>
+              <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-powder-500 to-mint-400 h-full rounded-full transition-all"
+                  style={{ width: `${projectAnalytics?.taskMetrics?.completionPercentage ?? 0}%` }}
+                />
+              </div>
+            </div>
+
+            {/* 2. Tasks Completed */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-xs">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                Completed Tasks
+              </span>
+              <p className="text-2xl font-extrabold text-mint-600 dark:text-mint-400 mt-1">
+                {analyticsLoading ? '—' : projectAnalytics?.taskMetrics?.completed ?? 0}
+              </p>
+              <span className="text-[11px] text-slate-400 mt-1 block">
+                of {projectAnalytics?.taskMetrics?.total ?? 0} total tasks
+              </span>
+            </div>
+
+            {/* 3. In Progress */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-xs">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                Active Workload
+              </span>
+              <p className="text-2xl font-extrabold text-powder-600 dark:text-powder-400 mt-1">
+                {analyticsLoading ? '—' : (projectAnalytics?.taskMetrics?.inProgress ?? 0) + (projectAnalytics?.taskMetrics?.todo ?? 0)}
+              </p>
+              <span className="text-[11px] text-slate-400 mt-1 block">
+                {projectAnalytics?.taskMetrics?.inProgress ?? 0} in progress · {projectAnalytics?.taskMetrics?.todo ?? 0} to do
+              </span>
+            </div>
+
+            {/* 4. Overdue Tasks */}
+            <div className={`bg-white dark:bg-slate-900 rounded-2xl border p-4 shadow-xs ${
+              (projectAnalytics?.taskMetrics?.overdue ?? 0) > 0
+                ? 'border-rose-300 dark:border-rose-800 bg-rose-50/10'
+                : 'border-slate-200 dark:border-slate-800'
+            }`}>
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                Overdue
+              </span>
+              <p className={`text-2xl font-extrabold mt-1 ${
+                (projectAnalytics?.taskMetrics?.overdue ?? 0) > 0 ? 'text-rose-600' : 'text-slate-900 dark:text-white'
+              }`}>
+                {analyticsLoading ? '—' : projectAnalytics?.taskMetrics?.overdue ?? 0}
+              </p>
+              <span className="text-[11px] text-slate-400 mt-1 block">
+                {(projectAnalytics?.taskMetrics?.overdue ?? 0) > 0 ? 'Action required' : 'On schedule'}
+              </span>
+            </div>
+
+            {/* 5. Time Tracked */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-xs col-span-2 sm:col-span-1">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                Time Spent
+              </span>
+              <p className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 mt-1">
+                {analyticsLoading
+                  ? '—'
+                  : `${Math.round(((projectAnalytics?.timeMetrics?.totalTrackedSeconds ?? 0) / 3600) * 10) / 10}h`}
+              </p>
+              <span className="text-[11px] text-slate-400 mt-1 block">
+                {projectAnalytics?.timeMetrics?.totalTrackedMinutes ?? 0} mins logged
+              </span>
+            </div>
+          </div>
+
+          {/* Project Charts Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Status Distribution */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-2">
+                Task Status Breakdown
+              </h3>
+              <div className="h-48 w-full">
+                {projectAnalytics?.taskMetrics?.total > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'To Do', value: projectAnalytics.taskMetrics.byStatus.TODO || 0, color: '#94a3b8' },
+                          { name: 'In Progress', value: projectAnalytics.taskMetrics.byStatus.IN_PROGRESS || 0, color: '#0ea5e9' },
+                          { name: 'Completed', value: projectAnalytics.taskMetrics.byStatus.COMPLETED || 0, color: '#10b981' },
+                        ].filter((i) => i.value > 0)}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={45}
+                        outerRadius={70}
+                        paddingAngle={4}
+                        dataKey="value"
+                      >
+                        {[
+                          { color: '#94a3b8' },
+                          { color: '#0ea5e9' },
+                          { color: '#10b981' },
+                        ].map((entry, idx) => (
+                          <Cell key={`cell-${idx}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            return (
+                              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-2 text-xs shadow-md">
+                                <span className="font-semibold">{payload[0].name}: </span>
+                                <span>{payload[0].value} tasks</span>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-xs text-slate-400">
+                    No task data recorded
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center text-xs pt-2 border-t border-slate-100 dark:border-slate-800">
+                <div>
+                  <span className="text-[10px] text-slate-400">To Do</span>
+                  <p className="font-bold">{projectAnalytics?.taskMetrics?.byStatus?.TODO ?? 0}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400">In Progress</span>
+                  <p className="font-bold text-powder-600">{projectAnalytics?.taskMetrics?.byStatus?.IN_PROGRESS ?? 0}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400">Completed</span>
+                  <p className="font-bold text-mint-600">{projectAnalytics?.taskMetrics?.byStatus?.COMPLETED ?? 0}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Priority Distribution */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-2">
+                Priority Distribution
+              </h3>
+              <div className="h-48 w-full">
+                {projectAnalytics?.taskMetrics?.total > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={[
+                        { name: 'Low', count: projectAnalytics.taskMetrics.byPriority.LOW || 0, fill: '#94a3b8' },
+                        { name: 'Medium', count: projectAnalytics.taskMetrics.byPriority.MEDIUM || 0, fill: '#38bdf8' },
+                        { name: 'High', count: projectAnalytics.taskMetrics.byPriority.HIGH || 0, fill: '#f59e0b' },
+                        { name: 'Urgent', count: projectAnalytics.taskMetrics.byPriority.URGENT || 0, fill: '#f43f5e' },
+                      ]}
+                      margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                    >
+                      <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} />
+                      <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} allowDecimals={false} />
+                      <RechartsTooltip
+                        content={({ active, payload, label }) => {
+                          if (active && payload && payload.length) {
+                            return (
+                              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-2 text-xs shadow-md">
+                                <span className="font-semibold">{label}: </span>
+                                <span>{payload[0].value} tasks</span>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Bar dataKey="count" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-xs text-slate-400">
+                    No task data recorded
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-4 gap-1 text-center text-xs pt-2 border-t border-slate-100 dark:border-slate-800">
+                <div>
+                  <span className="text-[10px] text-slate-400">Low</span>
+                  <p className="font-bold">{projectAnalytics?.taskMetrics?.byPriority?.LOW ?? 0}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400">Med</span>
+                  <p className="font-bold text-sky-600">{projectAnalytics?.taskMetrics?.byPriority?.MEDIUM ?? 0}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400">High</span>
+                  <p className="font-bold text-amber-600">{projectAnalytics?.taskMetrics?.byPriority?.HIGH ?? 0}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400">Urgent</span>
+                  <p className="font-bold text-rose-600">{projectAnalytics?.taskMetrics?.byPriority?.URGENT ?? 0}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Team Workload & Contribution Section ──────────────────────── */}
+          {teamForbidden ? (
+            <div className="bg-amber-50/60 dark:bg-amber-950/20 rounded-2xl border border-amber-200 dark:border-amber-900/60 p-5 text-xs text-amber-800 dark:text-amber-200 flex items-center gap-3">
+              <Shield className="w-5 h-5 text-amber-600 shrink-0" />
+              <span>
+                Detailed team workload and individual member contribution metrics are accessible to Project Members, Managers, and Owners.
+              </span>
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Users className="w-4 h-4 text-powder-600" />
+                    <span>Team Workload & Contribution</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Fair, transparent view of active tasks, completion rate, and logged time per member.
+                  </p>
+                </div>
+                {teamAnalytics?.summary?.unassignedTasks > 0 && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 w-fit">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                    {teamAnalytics.summary.unassignedTasks} unassigned task{teamAnalytics.summary.unassignedTasks === 1 ? '' : 's'}
+                  </span>
+                )}
+              </div>
+
+              {/* Members Workload List */}
+              <div className="space-y-4">
+                {teamAnalytics?.members?.map((m) => {
+                  const signal = m.workloadSignal;
+                  let signalBadge = 'bg-mint-50 dark:bg-mint-950/60 text-mint-700 dark:text-mint-300 border-mint-200 dark:border-mint-800';
+                  if (signal === 'HIGH') {
+                    signalBadge = 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800';
+                  } else if (signal === 'MODERATE') {
+                    signalBadge = 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800';
+                  }
+
+                  // Max task reference for visual bar:
+                  const maxTasks = Math.max(1, ...teamAnalytics.members.map((x) => x.assignedTasks));
+                  const workloadBarPct = Math.round((m.assignedTasks / maxTasks) * 100);
+
+                  return (
+                    <div
+                      key={m.member._id}
+                      className="p-4 rounded-xl bg-slate-50/60 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 space-y-3"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-3">
+                          {m.member.profileImageURL ? (
+                            <img
+                              src={m.member.profileImageURL}
+                              alt={m.member.name}
+                              className="w-9 h-9 rounded-full object-cover border border-slate-200"
+                            />
+                          ) : (
+                            <div className="w-9 h-9 rounded-full bg-powder-500 text-white flex items-center justify-center font-bold text-xs">
+                              {m.member.name?.slice(0, 2).toUpperCase() || 'U'}
+                            </div>
+                          )}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-slate-900 dark:text-white">
+                                {m.member.name}
+                              </span>
+                              <span className="text-[10px] font-semibold text-slate-400">
+                                ({m.member.role})
+                              </span>
+                            </div>
+                            <span className="text-xs text-slate-400">{m.member.email}</span>
+                          </div>
+                        </div>
+
+                        {/* Workload Signal Pill */}
+                        <div className="flex items-center gap-3">
+                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${signalBadge}`}>
+                            {m.workloadLabel} ({m.activeTasks} active)
+                          </span>
+                          <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                            {m.timeSpentMinutes}m logged
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Workload Distribution Visual Bar */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                          <span>
+                            {m.completedTasks} completed · {m.inProgressTasks} in progress · {m.todoTasks} to do
+                          </span>
+                          <span className="font-semibold">{m.completionRate}% completion</span>
+                        </div>
+                        <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                          <div
+                            className="bg-powder-500 h-full rounded-full transition-all duration-300"
+                            style={{ width: `${workloadBarPct}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
