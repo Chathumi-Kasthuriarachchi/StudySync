@@ -1,5 +1,26 @@
 const User = require("../models/User");
+const RefreshTokenSession = require("../models/RefreshTokenSession");
+const Project = require("../models/Project");
+const ProjectMembership = require("../models/ProjectMembership");
+const ProjectInvitation = require("../models/ProjectInvitation");
+const Task = require("../models/Task");
+const Comment = require("../models/Comment");
+const Goal = require("../models/Goal");
+const TimeSession = require("../models/TimeSession");
+const Meeting = require("../models/Meeting");
+const Notification = require("../models/Notification");
 const { uploadToCloudinary, deleteFromCloudinary } = require("../middleware/uploadMiddleware");
+const {
+    generateAccessToken,
+    generateRefreshToken,
+    createRefreshSession,
+    revokeAllUserSessions,
+    setRefreshCookie,
+    clearRefreshCookie,
+    REFRESH_COOKIE_NAME,
+    getUserActiveSessions,
+} = require("../services/tokenService");
+const { sendSupportEmail } = require("../services/emailService");
 
 /**
  * searchUsers
@@ -365,6 +386,336 @@ const updateUserPreferences = async (req, res) => {
     }
 };
 
+const PASSWORD_REGEX = /^(?=.*[0-9])(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~])/;
+const validatePasswordStrength = (password) => {
+    if (!password || password.length < 8) return "Password must be at least 8 characters long.";
+    if (!/[0-9]/.test(password)) return "Password must contain at least one number.";
+    if (!PASSWORD_REGEX.test(password)) return "Password must contain at least one special character.";
+    return null;
+};
+
+/**
+ * changePassword
+ * PUT /api/users/change-password
+ */
+const changePassword = async (req, res) => {
+    try {
+        const { currentPassword, newPassword, confirmPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "Current password and new password are required.",
+            });
+        }
+
+        if (confirmPassword !== undefined && newPassword !== confirmPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "New password and confirmation do not match.",
+            });
+        }
+
+        const user = await User.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found." });
+        }
+
+        // Verify current password
+        const isMatch = await user.matchPassword(currentPassword);
+        if (!isMatch) {
+            return res.status(400).json({
+                success: false,
+                message: "The current password you entered is incorrect.",
+            });
+        }
+
+        // Validate new password strength
+        const strengthError = validatePasswordStrength(newPassword);
+        if (strengthError) {
+            return res.status(400).json({
+                success: false,
+                message: strengthError,
+            });
+        }
+
+        // Check that new password is not identical to current password
+        const isSame = await user.matchPassword(newPassword);
+        if (isSame) {
+            return res.status(400).json({
+                success: false,
+                message: "New password must be different from your current password.",
+            });
+        }
+
+        // Update password (pre-save hook will hash it with bcrypt)
+        user.password = newPassword;
+        await user.save();
+
+        // Revoke all existing sessions for security
+        await revokeAllUserSessions(user._id);
+
+        // Issue new session & cookie for current device so user stays logged in seamlessly
+        const newRefreshToken = generateRefreshToken();
+        await createRefreshSession(user._id, newRefreshToken, req);
+        setRefreshCookie(res, newRefreshToken);
+        const accessToken = generateAccessToken(user._id, user.systemRole);
+
+        return res.status(200).json({
+            success: true,
+            message: "Password changed successfully.",
+            data: { accessToken },
+        });
+    } catch (err) {
+        console.error("changePassword error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to change password.",
+            error: err.message,
+        });
+    }
+};
+
+/**
+ * getActiveSessions
+ * GET /api/users/sessions
+ */
+const getActiveSessions = async (req, res) => {
+    try {
+        const currentRefreshToken = req.cookies?.[REFRESH_COOKIE_NAME];
+        const sessions = await getUserActiveSessions(req.user._id, currentRefreshToken);
+
+        return res.status(200).json({
+            success: true,
+            data: { sessions },
+        });
+    } catch (err) {
+        console.error("getActiveSessions error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to retrieve active sessions.",
+            error: err.message,
+        });
+    }
+};
+
+/**
+ * logoutAllDevices
+ * POST /api/users/sessions/logout-all
+ */
+const logoutAllDevices = async (req, res) => {
+    try {
+        await revokeAllUserSessions(req.user._id);
+        clearRefreshCookie(res);
+
+        return res.status(200).json({
+            success: true,
+            message: "Successfully logged out from all devices.",
+        });
+    } catch (err) {
+        console.error("logoutAllDevices error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to logout from all devices.",
+            error: err.message,
+        });
+    }
+};
+
+/**
+ * revokeSession
+ * DELETE /api/users/sessions/:id
+ */
+const revokeSession = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const session = await RefreshTokenSession.findOne({
+            _id: id,
+            userId: req.user._id,
+        });
+
+        if (!session) {
+            return res.status(404).json({
+                success: false,
+                message: "Session not found or already terminated.",
+            });
+        }
+
+        session.revoked = true;
+        await session.save();
+
+        return res.status(200).json({
+            success: true,
+            message: "Session revoked successfully.",
+        });
+    } catch (err) {
+        console.error("revokeSession error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to revoke session.",
+            error: err.message,
+        });
+    }
+};
+
+/**
+ * submitSupportTicket
+ * POST /api/users/support
+ */
+const submitSupportTicket = async (req, res) => {
+    try {
+        const { name, email, subject, message } = req.body;
+
+        if (!name || !name.trim()) {
+            return res.status(400).json({ success: false, message: "Name is required." });
+        }
+        if (!email || !email.trim()) {
+            return res.status(400).json({ success: false, message: "Email is required." });
+        }
+        if (!subject || !subject.trim()) {
+            return res.status(400).json({ success: false, message: "Subject is required." });
+        }
+        if (!message || !message.trim()) {
+            return res.status(400).json({ success: false, message: "Message is required." });
+        }
+
+        if (subject.trim().length > 150) {
+            return res.status(400).json({ success: false, message: "Subject cannot exceed 150 characters." });
+        }
+        if (message.trim().length > 2000) {
+            return res.status(400).json({ success: false, message: "Message cannot exceed 2000 characters." });
+        }
+
+        await sendSupportEmail({
+            name: name.trim(),
+            email: email.trim().toLowerCase(),
+            subject: subject.trim(),
+            message: message.trim(),
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "Support inquiry sent successfully. Our team will review your request.",
+        });
+    } catch (err) {
+        console.error("submitSupportTicket error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to submit support inquiry. Please try again.",
+            error: err.message,
+        });
+    }
+};
+
+/**
+ * deleteAccount
+ * DELETE /api/users/account
+ *
+ * Destructive permanent account deletion with password verification & cascading cleanup.
+ */
+const deleteAccount = async (req, res) => {
+    try {
+        const { confirmationText, password } = req.body;
+
+        if (confirmationText !== "DELETE") {
+            return res.status(400).json({
+                success: false,
+                message: "Please type 'DELETE' exactly to confirm account deletion.",
+            });
+        }
+
+        if (!password) {
+            return res.status(400).json({
+                success: false,
+                message: "Please enter your password to confirm account deletion.",
+            });
+        }
+
+        const user = await User.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found." });
+        }
+
+        const isMatch = await user.matchPassword(password);
+        if (!isMatch) {
+            return res.status(400).json({
+                success: false,
+                message: "Incorrect password. Account deletion aborted.",
+            });
+        }
+
+        const userId = user._id;
+
+        // 1. Delete Cloudinary avatar asset if exists
+        if (user.profileImageURL) {
+            try {
+                await deleteFromCloudinary(`studysync/user_avatar_${userId}`);
+            } catch (cloudErr) {
+                console.warn("Notice: Could not delete Cloudinary avatar during account deletion:", cloudErr.message);
+            }
+        }
+
+        // 2. Cascade delete projects owned by this user
+        const ownedProjects = await Project.find({ owner: userId }).select("_id");
+        const ownedProjectIds = ownedProjects.map((p) => p._id);
+
+        if (ownedProjectIds.length > 0) {
+            await Promise.all([
+                Project.deleteMany({ _id: { $in: ownedProjectIds } }),
+                ProjectMembership.deleteMany({ project: { $in: ownedProjectIds } }),
+                ProjectInvitation.deleteMany({ project: { $in: ownedProjectIds } }),
+                Task.deleteMany({ project: { $in: ownedProjectIds } }),
+            ]);
+        }
+
+        // 3. Cascade cleanup for memberships and invitations in other projects
+        await Promise.all([
+            ProjectMembership.deleteMany({ user: userId }),
+            ProjectInvitation.deleteMany({ $or: [{ invitedUser: userId }, { invitedBy: userId }] }),
+        ]);
+
+        // 4. Tasks: unassign from shared projects, delete personal tasks
+        await Promise.all([
+            Task.updateMany({ assignee: userId }, { $set: { assignee: null } }),
+            Task.deleteMany({ createdBy: userId, project: null }),
+        ]);
+
+        // 5. Delete comments, goals, time sessions, notifications
+        await Promise.all([
+            Comment.deleteMany({ author: userId }),
+            Goal.deleteMany({ user: userId }),
+            TimeSession.deleteMany({ user: userId }),
+            Notification.deleteMany({ $or: [{ recipient: userId }, { sender: userId }] }),
+        ]);
+
+        // 6. Meetings: delete owned meetings, pull from participants
+        await Promise.all([
+            Meeting.deleteMany({ organizer: userId }),
+            Meeting.updateMany({ participants: userId }, { $pull: { participants: userId } }),
+        ]);
+
+        // 7. Revoke and delete all refresh token sessions
+        await RefreshTokenSession.deleteMany({ userId });
+        clearRefreshCookie(res);
+
+        // 8. Delete user record
+        await User.findByIdAndDelete(userId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Account and associated data deleted permanently.",
+        });
+    } catch (err) {
+        console.error("deleteAccount error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to delete account.",
+            error: err.message,
+        });
+    }
+};
+
 module.exports = {
     searchUsers,
     uploadProfileImage,
@@ -373,5 +724,12 @@ module.exports = {
     updateUserProfile,
     updateUserPreferences,
     formatUserResponse,
+    changePassword,
+    getActiveSessions,
+    logoutAllDevices,
+    revokeSession,
+    submitSupportTicket,
+    deleteAccount,
 };
+
 
