@@ -1,10 +1,24 @@
 const express = require("express");
 const router = express.Router();
 const { protect } = require("../middleware/authMiddleware");
-const { searchUsers } = require("../controllers/userController");
+const { uploadSingleImage } = require("../middleware/uploadMiddleware");
+const {
+    searchUsers,
+    uploadProfileImage,
+    removeProfileImage,
+} = require("../controllers/userController");
 
 // Search registered users for project invitations
 router.get("/search", protect, searchUsers);
+
+// Profile Image Upload & Removal endpoints
+router.post(
+    "/profile-image",
+    protect,
+    uploadSingleImage("image"),
+    uploadProfileImage
+);
+router.delete("/profile-image", protect, removeProfileImage);
 
 // Generic user health / status endpoint
 router.get("/", (req, res) => {
