@@ -88,13 +88,13 @@ const uploadProfileImage = async (req, res) => {
             req.user._id,
             { profileImageURL: result.secure_url },
             { new: true }
-        ).select("_id name email profileImageURL systemRole");
+        );
 
         return res.status(200).json({
             success: true,
             message: "Profile image uploaded successfully.",
             data: {
-                user: updatedUser,
+                user: formatUserResponse(updatedUser),
                 profileImageURL: result.secure_url,
             },
         });
@@ -127,13 +127,13 @@ const removeProfileImage = async (req, res) => {
             req.user._id,
             { profileImageURL: null },
             { new: true }
-        ).select("_id name email profileImageURL systemRole");
+        );
 
         return res.status(200).json({
             success: true,
             message: "Profile image removed successfully.",
             data: {
-                user: updatedUser,
+                user: formatUserResponse(updatedUser),
                 profileImageURL: null,
             },
         });
@@ -147,8 +147,231 @@ const removeProfileImage = async (req, res) => {
     }
 };
 
+/**
+ * Helper to normalize and sanitize user payload
+ */
+const formatUserResponse = (user) => ({
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    username: user.username || "",
+    bio: user.bio || "",
+    systemRole: user.systemRole,
+    profileImageURL: user.profileImageURL || null,
+    preferences: user.preferences || {
+        theme: "system",
+        language: "en",
+        emailNotifications: true,
+    },
+    emailVerified: user.emailVerified,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+});
+
+/**
+ * getUserProfile
+ * GET /api/users/profile
+ *
+ * Returns current authenticated user's complete profile and preferences.
+ */
+const getUserProfile = async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found." });
+        }
+        return res.status(200).json({
+            success: true,
+            data: { user: formatUserResponse(user) },
+        });
+    } catch (err) {
+        console.error("getUserProfile error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to retrieve user profile.",
+            error: err.message,
+        });
+    }
+};
+
+/**
+ * updateUserProfile
+ * PUT /api/users/profile
+ *
+ * Updates current authenticated user's name, username, and bio.
+ * Enforces username validation and uniqueness.
+ */
+const updateUserProfile = async (req, res) => {
+    try {
+        const { name, username, bio } = req.body;
+        const user = await User.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found." });
+        }
+
+        // Validate Full Name if supplied
+        if (name !== undefined) {
+            const trimmedName = name.trim();
+            if (!trimmedName) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Name cannot be empty.",
+                });
+            }
+            if (trimmedName.length > 50) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Name cannot exceed 50 characters.",
+                });
+            }
+            user.name = trimmedName;
+        }
+
+        // Validate Username if supplied
+        if (username !== undefined) {
+            const trimmedUsername = username.trim().toLowerCase();
+            if (trimmedUsername.length > 0) {
+                const usernameRegex = /^[a-zA-Z0-9_]{3,30}$/;
+                if (!usernameRegex.test(trimmedUsername)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Username must be 3-30 characters long and contain only letters, numbers, and underscores.",
+                    });
+                }
+
+                // Check uniqueness against other users
+                const existingUser = await User.findOne({
+                    username: trimmedUsername,
+                    _id: { $ne: user._id },
+                });
+
+                if (existingUser) {
+                    return res.status(409).json({
+                        success: false,
+                        message: "Username is already taken. Please choose another username.",
+                    });
+                }
+
+                user.username = trimmedUsername;
+            } else {
+                user.username = undefined;
+            }
+        }
+
+        // Validate Bio if supplied
+        if (bio !== undefined) {
+            if (bio.length > 500) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Bio cannot exceed 500 characters.",
+                });
+            }
+            user.bio = bio.trim();
+        }
+
+        await user.save();
+
+        return res.status(200).json({
+            success: true,
+            message: "Profile updated successfully.",
+            data: { user: formatUserResponse(user) },
+        });
+    } catch (err) {
+        console.error("updateUserProfile error:", err);
+        if (err.code === 11000) {
+            return res.status(409).json({
+                success: false,
+                message: "Username is already taken. Please choose another username.",
+            });
+        }
+        return res.status(500).json({
+            success: false,
+            message: "Failed to update profile.",
+            error: err.message,
+        });
+    }
+};
+
+/**
+ * updateUserPreferences
+ * PUT /api/users/preferences
+ *
+ * Updates current authenticated user's theme, language, and emailNotifications preferences.
+ */
+const updateUserPreferences = async (req, res) => {
+    try {
+        const { theme, language, emailNotifications } = req.body;
+        const user = await User.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found." });
+        }
+
+        if (!user.preferences) {
+            user.preferences = {
+                theme: "system",
+                language: "en",
+                emailNotifications: true,
+            };
+        }
+
+        if (theme !== undefined) {
+            const validThemes = ["light", "dark", "system"];
+            if (!validThemes.includes(theme)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid theme preference. Choose from light, dark, or system.",
+                });
+            }
+            user.preferences.theme = theme;
+        }
+
+        if (language !== undefined) {
+            if (typeof language !== "string" || !language.trim()) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid language preference.",
+                });
+            }
+            user.preferences.language = language.trim();
+        }
+
+        if (emailNotifications !== undefined) {
+            if (typeof emailNotifications !== "boolean") {
+                return res.status(400).json({
+                    success: false,
+                    message: "emailNotifications must be a boolean (true or false).",
+                });
+            }
+            user.preferences.emailNotifications = emailNotifications;
+        }
+
+        await user.save();
+
+        return res.status(200).json({
+            success: true,
+            message: "Preferences updated successfully.",
+            data: {
+                preferences: user.preferences,
+                user: formatUserResponse(user),
+            },
+        });
+    } catch (err) {
+        console.error("updateUserPreferences error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to update preferences.",
+            error: err.message,
+        });
+    }
+};
+
 module.exports = {
     searchUsers,
     uploadProfileImage,
     removeProfileImage,
+    getUserProfile,
+    updateUserProfile,
+    updateUserPreferences,
+    formatUserResponse,
 };
+
