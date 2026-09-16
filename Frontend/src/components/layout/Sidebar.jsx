@@ -257,10 +257,18 @@ const Sidebar = ({
           >
             {/* Avatar */}
             <div
-              className="w-9 h-9 rounded-xl bg-powder-100 dark:bg-powder-900/60 text-powder-700 dark:text-powder-300 font-bold flex items-center justify-center text-xs shrink-0 border border-powder-200 dark:border-powder-800/60"
+              className="w-9 h-9 rounded-xl overflow-hidden bg-powder-100 dark:bg-powder-900/60 text-powder-700 dark:text-powder-300 font-bold flex items-center justify-center text-xs shrink-0 border border-powder-200 dark:border-powder-800/60"
               title={user?.name || 'User'}
             >
-              {getInitials(user?.name)}
+              {user?.profileImageURL ? (
+                <img
+                  src={user.profileImageURL}
+                  alt={user?.name || 'User'}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                getInitials(user?.name)
+              )}
             </div>
 
             {/* User Meta (hidden in collapsed mode on desktop) */}

@@ -6,6 +6,7 @@ import { NotificationProvider } from './context/NotificationContext';
 import MainLayout from './layouts/MainLayout';
 import AppLayout from './layouts/AppLayout';
 import ProtectedRoute from './routes/ProtectedRoute';
+import { Toaster } from 'react-hot-toast';
 
 // Public Pages
 import Home from './pages/Home';
@@ -95,6 +96,7 @@ const App = () => {
               {/* Catch-all redirect */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
           </Router>
         </NotificationProvider>
       </TimeTrackingProvider>
