@@ -1,17 +1,39 @@
-import React, { useState, useRef } from 'react';
-import { User as UserIcon, Mail, Shield, KeyRound, Camera, Trash2, Loader2, Upload } from 'lucide-react';
+import { useState, useRef } from 'react';
+import {
+  Mail,
+  Shield,
+  Calendar,
+  AtSign,
+  Pencil,
+  Camera,
+  Trash2,
+  Loader2,
+  Upload,
+  CheckCircle2,
+} from 'lucide-react';
+import moment from 'moment';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { uploadProfileImage, removeProfileImage } from '../services/userService';
+import EditProfileModal from '../components/profile/EditProfileModal';
 
 /**
- * Profile Page
+ * Profile Page (Phase 1)
  * 
- * Displays user account details, role authorizations, and allows
- * uploading/updating the user's profile avatar via Cloudinary.
+ * Displays complete personal profile information:
+ * - Profile picture (with upload/remove triggers)
+ * - Full name
+ * - Email (read-only)
+ * - Username
+ * - Bio
+ * - Member since (formatted creation date)
+ * - Account type (system-level RBAC role)
+ * 
+ * Includes the "Edit Profile" modal trigger.
  */
 const Profile = () => {
   const { user, updateUser } = useAuth();
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
   const fileInputRef = useRef(null);
@@ -26,6 +48,11 @@ const Profile = () => {
   };
 
   const isAdmin = user?.systemRole === 'ADMIN';
+
+  // Format creation date (Member since: e.g. "September 2026")
+  const memberSince = user?.createdAt
+    ? moment(user.createdAt).format('MMMM YYYY')
+    : moment().format('MMMM YYYY');
 
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
@@ -83,20 +110,31 @@ const Profile = () => {
 
   return (
     <div className="space-y-6 max-w-4xl animate-fadeIn">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-          Account Profile
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          Manage your personal details, profile picture, and view system authorizations.
-        </p>
+      {/* Top Header & Edit Profile Action */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+            Account Profile
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            Manage your personal details, profile picture, and view account information.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setIsEditModalOpen(true)}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold text-white bg-powder-600 hover:bg-powder-700 active:scale-95 shadow-md shadow-powder-500/20 transition cursor-pointer self-start sm:self-auto"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+          Edit Profile
+        </button>
       </div>
 
       {/* Main Profile Card */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 shadow-xs">
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 pb-8 border-b border-slate-100 dark:border-slate-800">
-          {/* Avatar Container with Hover Upload Overlay */}
+          {/* Avatar Container with Hover/Overlay Controls */}
           <div className="relative group shrink-0">
             <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl overflow-hidden bg-gradient-to-tr from-powder-500 to-mint-400 text-white font-extrabold text-3xl flex items-center justify-center shadow-md border-2 border-white dark:border-slate-800">
               {user?.profileImageURL ? (
@@ -139,27 +177,55 @@ const Profile = () => {
             />
           </div>
 
-          <div className="flex-1 text-center sm:text-left space-y-2">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+          <div className="flex-1 text-center sm:text-left space-y-2.5 min-w-0">
+            {/* Name & Role Badge */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white truncate">
                 {user?.name || 'StudySync Member'}
               </h2>
               <span
-                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider self-center sm:self-auto ${
+                className={`inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider self-center sm:self-auto ${
                   isAdmin
                     ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-700'
                     : 'bg-mint-100 text-mint-900 dark:bg-mint-950/60 dark:text-mint-300 border border-mint-300 dark:border-mint-700'
                 }`}
               >
-                <Shield className="w-3.5 h-3.5" />
-                {user?.systemRole || 'USER'}
+                <Shield className="w-3 h-3" />
+                {isAdmin ? 'Admin' : 'User'}
               </span>
             </div>
-            <p className="text-sm text-slate-500 dark:text-slate-400 font-mono">
-              {user?.email}
-            </p>
 
-            {/* Photo Action Buttons & Guidance */}
+            {/* Username & Email Meta */}
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-1 text-xs">
+              {user?.username ? (
+                <span className="font-mono font-semibold text-powder-600 dark:text-powder-400 bg-powder-50 dark:bg-powder-950/50 px-2.5 py-0.5 rounded-lg border border-powder-200 dark:border-powder-800/60">
+                  @{user.username}
+                </span>
+              ) : (
+                <span className="text-slate-400 dark:text-slate-500 italic text-[11px]">
+                  No handle set &bull; click Edit Profile to add one
+                </span>
+              )}
+              <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">&bull;</span>
+              <span className="text-slate-500 dark:text-slate-400 font-mono">
+                {user?.email}
+              </span>
+            </div>
+
+            {/* Bio Section */}
+            <div className="pt-1">
+              {user?.bio ? (
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-2xl bg-slate-50 dark:bg-slate-800/40 p-3 rounded-2xl border border-slate-100 dark:border-slate-800/80">
+                  {user.bio}
+                </p>
+              ) : (
+                <p className="text-xs text-slate-400 dark:text-slate-500 italic">
+                  No bio added yet. Tell others a little about your studies and productivity goals!
+                </p>
+              )}
+            </div>
+
+            {/* Photo Action Buttons */}
             <div className="pt-2 flex flex-wrap items-center justify-center sm:justify-start gap-2">
               <button
                 type="button"
@@ -194,59 +260,82 @@ const Profile = () => {
           </div>
         </div>
 
-        {/* User Information Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-8">
-          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 flex items-start gap-3">
-            <div className="p-2.5 rounded-xl bg-powder-50 dark:bg-powder-950/60 text-powder-600 dark:text-powder-400">
-              <UserIcon className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-400 font-medium">Full Name</p>
-              <p className="text-sm font-semibold text-slate-900 dark:text-white mt-0.5">
-                {user?.name || 'Not provided'}
-              </p>
-            </div>
-          </div>
+        {/* Account Information Section */}
+        <div className="pt-8">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-4">
+            Account Information
+          </h3>
 
-          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 flex items-start gap-3">
-            <div className="p-2.5 rounded-xl bg-powder-50 dark:bg-powder-950/60 text-powder-600 dark:text-powder-400">
-              <Mail className="w-5 h-5" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Member Since */}
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 flex items-start gap-3.5">
+              <div className="p-2.5 rounded-xl bg-powder-50 dark:bg-powder-950/60 text-powder-600 dark:text-powder-400">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 font-medium">Member since</p>
+                <p className="text-sm font-semibold text-slate-900 dark:text-white mt-0.5">
+                  {memberSince}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-slate-400 font-medium">Email Address</p>
-              <p className="text-sm font-semibold text-slate-900 dark:text-white mt-0.5 font-mono">
-                {user?.email || 'Not provided'}
-              </p>
-            </div>
-          </div>
 
-          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 flex items-start gap-3">
-            <div className="p-2.5 rounded-xl bg-mint-50 dark:bg-mint-950/60 text-mint-600 dark:text-mint-400">
-              <Shield className="w-5 h-5" />
+            {/* Account Type */}
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 flex items-start gap-3.5">
+              <div className="p-2.5 rounded-xl bg-mint-50 dark:bg-mint-950/60 text-mint-600 dark:text-mint-400">
+                <Shield className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 font-medium">Account type</p>
+                <p className="text-sm font-semibold text-slate-900 dark:text-white mt-0.5">
+                  {isAdmin ? 'Admin' : 'User'}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-slate-400 font-medium">System Role (RBAC)</p>
-              <p className="text-sm font-semibold text-slate-900 dark:text-white mt-0.5">
-                {user?.systemRole === 'ADMIN'
-                  ? 'Administrator (Full System Access)'
-                  : 'Standard User (Personal Workspace)'}
-              </p>
-            </div>
-          </div>
 
-          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 flex items-start gap-3">
-            <div className="p-2.5 rounded-xl bg-mint-50 dark:bg-mint-950/60 text-mint-600 dark:text-mint-400">
-              <KeyRound className="w-5 h-5" />
+            {/* Email Address */}
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 flex items-start gap-3.5">
+              <div className="p-2.5 rounded-xl bg-powder-50 dark:bg-powder-950/60 text-powder-600 dark:text-powder-400">
+                <Mail className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs text-slate-400 font-medium">Email Address</p>
+                  {user?.emailVerified && (
+                    <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-mint-600 dark:text-mint-400">
+                      <CheckCircle2 className="w-3 h-3" /> Verified
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm font-semibold text-slate-900 dark:text-white mt-0.5 font-mono truncate">
+                  {user?.email || 'Not provided'}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-slate-400 font-medium">Authentication Token</p>
-              <p className="text-sm font-semibold text-slate-900 dark:text-white mt-0.5">
-                JWT Active & Verified
-              </p>
+
+            {/* Username Handle */}
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 flex items-start gap-3.5">
+              <div className="p-2.5 rounded-xl bg-mint-50 dark:bg-mint-950/60 text-mint-600 dark:text-mint-400">
+                <AtSign className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 font-medium">Username Handle</p>
+                <p className="text-sm font-semibold text-slate-900 dark:text-white mt-0.5 font-mono">
+                  {user?.username ? `@${user.username}` : 'Not set yet'}
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Edit Profile Modal Dialog */}
+      {isEditModalOpen && (
+        <EditProfileModal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+        />
+      )}
     </div>
   );
 };

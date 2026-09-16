@@ -1,6 +1,6 @@
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { TimeTrackingProvider } from './context/TimeTrackingContext';
 import { NotificationProvider } from './context/NotificationContext';
 import MainLayout from './layouts/MainLayout';
@@ -59,47 +59,49 @@ import Settings from './pages/Settings';
 const App = () => {
   return (
     <AuthProvider>
-      <TimeTrackingProvider>
-        <NotificationProvider>
-          <Router>
-            <Routes>
-              {/* Public Routes (Marketing & Auth Shell) */}
-              <Route element={<MainLayout />}>
-                <Route path="/" element={<Home />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/signup" element={<Signup />} />
-                <Route path="/verify-email" element={<VerifyEmail />} />
-                <Route path="/forgot-password" element={<ForgotPassword />} />
-                <Route path="/terms" element={<Terms />} />
-                <Route path="/privacy" element={<Privacy />} />
-              </Route>
-
-              {/* Protected Routes (Authenticated Workspace Shell) */}
-              <Route element={<ProtectedRoute />}>
-                <Route element={<AppLayout />}>
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/tasks" element={<Tasks />} />
-                  <Route path="/projects" element={<Projects />} />
-                  <Route path="/projects/:id" element={<ProjectDetails />} />
-                  <Route path="/goals" element={<Goals />} />
-                  <Route path="/goals/:id" element={<GoalDetails />} />
-                  <Route path="/calendar" element={<Calendar />} />
-                  <Route path="/focus" element={<Focus />} />
-                  <Route path="/analytics" element={<Analytics />} />
-                  <Route path="/reports" element={<Reports />} />
-                  <Route path="/notifications" element={<Notifications />} />
-                  <Route path="/profile" element={<Profile />} />
-                  <Route path="/settings" element={<Settings />} />
+      <ThemeProvider>
+        <TimeTrackingProvider>
+          <NotificationProvider>
+            <Router>
+              <Routes>
+                {/* Public Routes (Marketing & Auth Shell) */}
+                <Route element={<MainLayout />}>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/signup" element={<Signup />} />
+                  <Route path="/verify-email" element={<VerifyEmail />} />
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
+                  <Route path="/terms" element={<Terms />} />
+                  <Route path="/privacy" element={<Privacy />} />
                 </Route>
-              </Route>
 
-              {/* Catch-all redirect */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-            <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
-          </Router>
-        </NotificationProvider>
-      </TimeTrackingProvider>
+                {/* Protected Routes (Authenticated Workspace Shell) */}
+                <Route element={<ProtectedRoute />}>
+                  <Route element={<AppLayout />}>
+                    <Route path="/dashboard" element={<Dashboard />} />
+                    <Route path="/tasks" element={<Tasks />} />
+                    <Route path="/projects" element={<Projects />} />
+                    <Route path="/projects/:id" element={<ProjectDetails />} />
+                    <Route path="/goals" element={<Goals />} />
+                    <Route path="/goals/:id" element={<GoalDetails />} />
+                    <Route path="/calendar" element={<Calendar />} />
+                    <Route path="/focus" element={<Focus />} />
+                    <Route path="/analytics" element={<Analytics />} />
+                    <Route path="/reports" element={<Reports />} />
+                    <Route path="/notifications" element={<Notifications />} />
+                    <Route path="/profile" element={<Profile />} />
+                    <Route path="/settings" element={<Settings />} />
+                  </Route>
+                </Route>
+
+                {/* Catch-all redirect */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+              <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
+            </Router>
+          </NotificationProvider>
+        </TimeTrackingProvider>
+      </ThemeProvider>
     </AuthProvider>
   );
 };

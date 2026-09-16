@@ -43,8 +43,41 @@ export const searchUsers = async (query) => {
   return response.data;
 };
 
+/**
+ * Get the current user's profile and preferences.
+ * @returns {Promise<Object>} { success, data: { user } }
+ */
+export const getUserProfile = async () => {
+  const response = await api.get('/api/users/profile');
+  return response.data;
+};
+
+/**
+ * Update the user's profile (name, username, bio).
+ * @param {Object} profileData { name, username, bio }
+ * @returns {Promise<Object>} { success, message, data: { user } }
+ */
+export const updateUserProfile = async (profileData) => {
+  const response = await api.put('/api/users/profile', profileData);
+  return response.data;
+};
+
+/**
+ * Update the user's preferences (theme, language, emailNotifications).
+ * @param {Object} preferencesData { theme, language, emailNotifications }
+ * @returns {Promise<Object>} { success, message, data: { preferences, user } }
+ */
+export const updateUserPreferences = async (preferencesData) => {
+  const response = await api.put('/api/users/preferences', preferencesData);
+  return response.data;
+};
+
 export default {
   uploadProfileImage,
   removeProfileImage,
   searchUsers,
+  getUserProfile,
+  updateUserProfile,
+  updateUserPreferences,
 };
+
