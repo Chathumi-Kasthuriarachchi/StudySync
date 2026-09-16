@@ -14,6 +14,7 @@ const calendarRoutes = require("./routes/calendarRoutes");
 const timeRoutes = require("./routes/timeRoutes");
 const goalRoutes = require("./routes/goalRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
+const analyticsRoutes = require("./routes/analyticsRoutes");
 
 const app = express();
 
@@ -26,6 +27,9 @@ const allowedOrigins = [
     process.env.CLIENT_URL,
     "http://localhost:5173",
     "http://localhost:3000",
+    "http://localhost:5174",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
 ].filter(Boolean);
 
 app.use(
@@ -73,6 +77,7 @@ app.use("/api/calendar", calendarRoutes);
 app.use("/api/time", timeRoutes);
 app.use("/api/goals", goalRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/analytics", analyticsRoutes);
 
 // Global 404 handler for unknown routes
 app.use((req, res) => {

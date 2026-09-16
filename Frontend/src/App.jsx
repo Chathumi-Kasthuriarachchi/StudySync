@@ -26,6 +26,7 @@ import Focus from './pages/Focus';
 import Goals from './pages/Goals';
 import GoalDetails from './pages/GoalDetails';
 import Analytics from './pages/Analytics';
+import Reports from './pages/Reports';
 import Notifications from './pages/Notifications';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
@@ -84,6 +85,7 @@ const App = () => {
                   <Route path="/calendar" element={<Calendar />} />
                   <Route path="/focus" element={<Focus />} />
                   <Route path="/analytics" element={<Analytics />} />
+                  <Route path="/reports" element={<Reports />} />
                   <Route path="/notifications" element={<Notifications />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/settings" element={<Settings />} />

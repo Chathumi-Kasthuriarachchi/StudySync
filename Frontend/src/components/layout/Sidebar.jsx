@@ -16,6 +16,7 @@ import {
   X,
   ShieldAlert,
   Bell,
+  FileText,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
@@ -201,6 +202,13 @@ const Sidebar = ({
               to="/analytics"
               icon={BarChart3}
               label="Analytics"
+              isCollapsed={isCollapsed}
+              onClick={handleNavClick}
+            />
+            <NavItem
+              to="/reports"
+              icon={FileText}
+              label="Reports"
               isCollapsed={isCollapsed}
               onClick={handleNavClick}
             />
