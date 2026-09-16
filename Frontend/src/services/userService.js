@@ -72,6 +72,64 @@ export const updateUserPreferences = async (preferencesData) => {
   return response.data;
 };
 
+/**
+ * Change the current user's password.
+ * @param {Object} data { currentPassword, newPassword, confirmPassword }
+ * @returns {Promise<Object>} { success, message, data: { accessToken } }
+ */
+export const changePassword = async (data) => {
+  const response = await api.put('/api/users/change-password', data);
+  return response.data;
+};
+
+/**
+ * Retrieve all active refresh token sessions for current user.
+ * @returns {Promise<Object>} { success, data: { sessions } }
+ */
+export const getActiveSessions = async () => {
+  const response = await api.get('/api/users/sessions');
+  return response.data;
+};
+
+/**
+ * Log out from all devices by revoking all refresh sessions.
+ * @returns {Promise<Object>} { success, message }
+ */
+export const logoutAllDevices = async () => {
+  const response = await api.post('/api/users/sessions/logout-all');
+  return response.data;
+};
+
+/**
+ * Revoke a specific active session.
+ * @param {string} sessionId
+ * @returns {Promise<Object>} { success, message }
+ */
+export const revokeSession = async (sessionId) => {
+  const response = await api.delete(`/api/users/sessions/${sessionId}`);
+  return response.data;
+};
+
+/**
+ * Submit a contact support ticket.
+ * @param {Object} data { name, email, subject, message }
+ * @returns {Promise<Object>} { success, message }
+ */
+export const submitSupportTicket = async (data) => {
+  const response = await api.post('/api/users/support', data);
+  return response.data;
+};
+
+/**
+ * Permanently delete the user account and associated data.
+ * @param {Object} data { confirmationText, password }
+ * @returns {Promise<Object>} { success, message }
+ */
+export const deleteAccount = async (data) => {
+  const response = await api.delete('/api/users/account', { data });
+  return response.data;
+};
+
 export default {
   uploadProfileImage,
   removeProfileImage,
@@ -79,5 +137,12 @@ export default {
   getUserProfile,
   updateUserProfile,
   updateUserPreferences,
+  changePassword,
+  getActiveSessions,
+  logoutAllDevices,
+  revokeSession,
+  submitSupportTicket,
+  deleteAccount,
 };
+
 

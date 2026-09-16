@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Mail,
   Shield,
@@ -18,7 +19,7 @@ import { uploadProfileImage, removeProfileImage } from '../services/userService'
 import EditProfileModal from '../components/profile/EditProfileModal';
 
 /**
- * Profile Page (Phase 1)
+ * Profile Page (Phase 1 & 2)
  * 
  * Displays complete personal profile information:
  * - Profile picture (with upload/remove triggers)
@@ -28,6 +29,7 @@ import EditProfileModal from '../components/profile/EditProfileModal';
  * - Bio
  * - Member since (formatted creation date)
  * - Account type (system-level RBAC role)
+ * - Navigation links to Security & Active Sessions
  * 
  * Includes the "Edit Profile" modal trigger.
  */
@@ -68,21 +70,24 @@ const Profile = () => {
 
     // Client-side MIME validation
     if (!file.type.startsWith('image/')) {
-      toast.error('Please select a valid image file (JPG, PNG, WEBP, GIF).');
+      toast.error('Only image files (JPG, PNG, WEBP, GIF) are allowed.');
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
+    const formData = new FormData();
+    formData.append('profileImage', file);
+
     try {
       setIsUploading(true);
-      const res = await uploadProfileImage(file);
-      if (res.success && res.data) {
-        updateUser(res.data.user || { profileImageURL: res.data.profileImageURL });
-        toast.success('Profile photo updated successfully!');
+      const res = await uploadProfileImage(formData);
+      if (res.success && res.data?.user) {
+        updateUser(res.data.user);
+        toast.success('Profile photo updated successfully.');
       }
     } catch (err) {
       console.error('Upload profile image error:', err);
-      toast.error(err.response?.data?.message || 'Failed to upload image. Please try again.');
+      toast.error(err.response?.data?.message || 'Failed to upload image.');
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -90,7 +95,6 @@ const Profile = () => {
   };
 
   const handleRemovePhoto = async () => {
-    if (!user?.profileImageURL) return;
     if (!window.confirm('Are you sure you want to remove your profile photo?')) return;
 
     try {
@@ -121,14 +125,23 @@ const Profile = () => {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setIsEditModalOpen(true)}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold text-white bg-powder-600 hover:bg-powder-700 active:scale-95 shadow-md shadow-powder-500/20 transition cursor-pointer self-start sm:self-auto"
-        >
-          <Pencil className="w-3.5 h-3.5" />
-          Edit Profile
-        </button>
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          <Link
+            to="/settings?tab=security"
+            className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-2xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition"
+          >
+            <Shield className="w-3.5 h-3.5 text-powder-500" />
+            Security &amp; Sessions
+          </Link>
+          <button
+            type="button"
+            onClick={() => setIsEditModalOpen(true)}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold text-white bg-powder-600 hover:bg-powder-700 active:scale-95 shadow-md shadow-powder-500/20 transition cursor-pointer"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            Edit Profile
+          </button>
+        </div>
       </div>
 
       {/* Main Profile Card */}
