@@ -20,7 +20,7 @@ const TECH_STACK = [
   { name: 'Tailwind CSS', role: 'Design System', color: 'bg-teal-50 dark:bg-teal-950/40 text-teal-600 dark:text-teal-400 border-teal-200 dark:border-teal-800' },
   { name: 'Node.js & Express', role: 'REST API Backend', color: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800' },
   { name: 'MongoDB', role: 'Database & Atlas', color: 'bg-green-50 dark:bg-green-950/40 text-green-600 dark:text-green-400 border-green-200 dark:border-green-800' },
-  { name: 'Cloudinary', role: 'CDN Media Storage', color: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800' },
+  { name: 'AWS S3', role: 'Cloud File Storage', color: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800' },
   { name: 'JWT & Cookies', role: 'Dual-Token Auth', color: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800' },
 ];
 
@@ -358,7 +358,7 @@ const AboutAndLegalSection = () => {
                       3. Data Retention &amp; Permanent Erasure
                     </h4>
                     <p>
-                      Your data is stored securely in MongoDB and Cloudinary. When you request account deletion, all personal
+                      Your data is stored securely in MongoDB and AWS S3. When you request account deletion, all personal
                       records, cloud avatars, and authentication sessions are permanently deleted across our infrastructure.
                     </p>
                   </section>

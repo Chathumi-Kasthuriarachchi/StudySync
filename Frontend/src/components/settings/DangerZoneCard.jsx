@@ -182,7 +182,7 @@ const DangerZoneCard = () => {
                   <strong>All personal data will be erased:</strong>
                   <ul className="list-disc pl-4 mt-1 space-y-0.5 text-[11px] text-red-700 dark:text-red-300/90">
                     <li>Tasks, projects, and comments will be permanently deleted</li>
-                    <li>Uploaded Cloudinary avatar files will be unlinked and removed</li>
+                    <li>Uploaded avatar files will be unlinked and removed</li>
                     <li>All active sessions on all devices will be terminated immediately</li>
                   </ul>
                 </div>
