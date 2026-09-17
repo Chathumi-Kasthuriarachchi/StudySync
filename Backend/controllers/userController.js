@@ -9,7 +9,7 @@ const Goal = require("../models/Goal");
 const TimeSession = require("../models/TimeSession");
 const Meeting = require("../models/Meeting");
 const Notification = require("../models/Notification");
-const { uploadToCloudinary, deleteFromCloudinary } = require("../middleware/uploadMiddleware");
+const { uploadFile, deleteFile, generatePresignedUrl, buildProfileImageKey } = require("../services/s3Service");
 const {
     generateAccessToken,
     generateRefreshToken,
@@ -73,8 +73,8 @@ const searchUsers = async (req, res) => {
  * uploadProfileImage
  * POST /api/users/profile-image
  *
- * Uploads an image to Cloudinary in the "studysync" folder and
- * sets the user's profileImageURL field.
+ * Uploads an image to AWS S3 in the "studysync/users/{userId}/profile/" prefix
+ * and sets the user's profileImageURL and profileImageS3Key fields.
  */
 const uploadProfileImage = async (req, res) => {
     try {
@@ -86,37 +86,58 @@ const uploadProfileImage = async (req, res) => {
         }
 
         if (
-            !process.env.CLOUDINARY_CLOUD_NAME ||
-            !process.env.CLOUDINARY_API_KEY ||
-            !process.env.CLOUDINARY_API_SECRET
+            !process.env.AWS_ACCESS_KEY_ID ||
+            !process.env.AWS_SECRET_ACCESS_KEY ||
+            !process.env.AWS_REGION ||
+            !process.env.AWS_S3_BUCKET_NAME
         ) {
             return res.status(500).json({
                 success: false,
-                message: "Cloudinary credentials are not configured on the server.",
+                message: "AWS S3 credentials are not configured on the server.",
             });
         }
 
-        // Upload buffer directly to Cloudinary folder "studysync"
-        const result = await uploadToCloudinary(req.file.buffer, {
-            folder: "studysync",
-            public_id: `user_avatar_${req.user._id}`,
-            overwrite: true,
-            invalidate: true,
+        // Delete the old S3 avatar if one exists (before uploading the replacement)
+        const currentUser = await User.findById(req.user._id);
+        const oldS3Key = currentUser?.profileImageS3Key;
+
+        // Build a unique S3 key for the new avatar
+        const s3Key = buildProfileImageKey(req.user._id, req.file.originalname);
+
+        // Upload buffer to S3
+        await uploadFile(req.file.buffer, s3Key, req.file.mimetype, {
+            uploadedBy: req.user._id.toString(),
+            originalName: req.file.originalname,
         });
 
-        // Persist new URL to MongoDB User model
+        // Generate a presigned URL for frontend access
+        const presignedUrl = await generatePresignedUrl(s3Key);
+
+        // Persist new S3 key and presigned URL to MongoDB
         const updatedUser = await User.findByIdAndUpdate(
             req.user._id,
-            { profileImageURL: result.secure_url },
+            {
+                profileImageURL: presignedUrl,
+                profileImageS3Key: s3Key,
+            },
             { new: true }
         );
+
+        // Clean up the old S3 object after successful upload
+        if (oldS3Key && oldS3Key !== s3Key) {
+            try {
+                await deleteFile(oldS3Key);
+            } catch (cleanupErr) {
+                console.warn("Notice: Could not delete old S3 avatar:", cleanupErr.message);
+            }
+        }
 
         return res.status(200).json({
             success: true,
             message: "Profile image uploaded successfully.",
             data: {
                 user: formatUserResponse(updatedUser),
-                profileImageURL: result.secure_url,
+                profileImageURL: presignedUrl,
             },
         });
     } catch (err) {
@@ -133,20 +154,26 @@ const uploadProfileImage = async (req, res) => {
  * removeProfileImage
  * DELETE /api/users/profile-image
  *
- * Clears the user's profileImageURL and deletes the avatar asset from Cloudinary.
+ * Clears the user's profileImageURL and profileImageS3Key, and deletes
+ * the avatar object from AWS S3.
  */
 const removeProfileImage = async (req, res) => {
     try {
-        // Attempt to clean up asset in Cloudinary
-        try {
-            await deleteFromCloudinary(`studysync/user_avatar_${req.user._id}`);
-        } catch (cloudErr) {
-            console.warn("Notice: Could not delete old avatar from Cloudinary:", cloudErr.message);
+        const currentUser = await User.findById(req.user._id);
+        const s3Key = currentUser?.profileImageS3Key;
+
+        // Attempt to clean up asset in S3
+        if (s3Key) {
+            try {
+                await deleteFile(s3Key);
+            } catch (s3Err) {
+                console.warn("Notice: Could not delete avatar from S3:", s3Err.message);
+            }
         }
 
         const updatedUser = await User.findByIdAndUpdate(
             req.user._id,
-            { profileImageURL: null },
+            { profileImageURL: null, profileImageS3Key: null },
             { new: true }
         );
 
@@ -163,6 +190,46 @@ const removeProfileImage = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: "Failed to remove profile image.",
+            error: err.message,
+        });
+    }
+};
+
+/**
+ * refreshProfileImageUrl
+ * GET /api/users/profile-image-url
+ *
+ * Regenerates a fresh presigned URL from the stored profileImageS3Key.
+ * Useful when existing presigned URLs have expired.
+ */
+const refreshProfileImageUrl = async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        if (!user || !user.profileImageS3Key) {
+            return res.status(200).json({
+                success: true,
+                data: { profileImageURL: null },
+            });
+        }
+
+        const presignedUrl = await generatePresignedUrl(user.profileImageS3Key);
+
+        // Update the stored URL so subsequent reads get the fresh URL
+        user.profileImageURL = presignedUrl;
+        await user.save();
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                profileImageURL: presignedUrl,
+                user: formatUserResponse(user),
+            },
+        });
+    } catch (err) {
+        console.error("refreshProfileImageUrl error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to refresh profile image URL.",
             error: err.message,
         });
     }
@@ -647,12 +714,12 @@ const deleteAccount = async (req, res) => {
 
         const userId = user._id;
 
-        // 1. Delete Cloudinary avatar asset if exists
-        if (user.profileImageURL) {
+        // 1. Delete S3 avatar asset if exists
+        if (user.profileImageS3Key) {
             try {
-                await deleteFromCloudinary(`studysync/user_avatar_${userId}`);
-            } catch (cloudErr) {
-                console.warn("Notice: Could not delete Cloudinary avatar during account deletion:", cloudErr.message);
+                await deleteFile(user.profileImageS3Key);
+            } catch (s3Err) {
+                console.warn("Notice: Could not delete S3 avatar during account deletion:", s3Err.message);
             }
         }
 
@@ -720,6 +787,7 @@ module.exports = {
     searchUsers,
     uploadProfileImage,
     removeProfileImage,
+    refreshProfileImageUrl,
     getUserProfile,
     updateUserProfile,
     updateUserPreferences,

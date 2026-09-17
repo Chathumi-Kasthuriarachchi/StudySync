@@ -39,6 +39,10 @@ const UserSchema = new mongoose.Schema(
             type: String,
             default: null,
         },
+        profileImageS3Key: {
+            type: String,
+            default: null,
+        },
         username: {
             type: String,
             unique: true,

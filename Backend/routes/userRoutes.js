@@ -6,6 +6,7 @@ const {
     searchUsers,
     uploadProfileImage,
     removeProfileImage,
+    refreshProfileImageUrl,
     getUserProfile,
     updateUserProfile,
     updateUserPreferences,
@@ -44,6 +45,7 @@ router.post(
     uploadProfileImage
 );
 router.delete("/profile-image", protect, removeProfileImage);
+router.get("/profile-image-url", protect, refreshProfileImageUrl);
 
 // Generic user health / status endpoint
 router.get("/", (req, res) => {

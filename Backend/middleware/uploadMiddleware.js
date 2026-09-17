@@ -1,5 +1,4 @@
 const multer = require("multer");
-const cloudinary = require("../config/cloudinary");
 
 // Configure Multer to store uploaded files in memory as Buffers
 const storage = multer.memoryStorage();
@@ -59,57 +58,7 @@ const uploadSingleImage = (fieldName = "image") => {
     };
 };
 
-/**
- * Upload a file buffer to Cloudinary using a readable stream.
- * Automatically resizes & optimizes images for avatar/profile use.
- *
- * @param {Buffer} fileBuffer
- * @param {Object} options Custom options (folder, transformation, etc.)
- * @returns {Promise<Object>} Cloudinary upload result
- */
-const uploadToCloudinary = (fileBuffer, options = {}) => {
-    return new Promise((resolve, reject) => {
-        const uploadStream = cloudinary.uploader.upload_stream(
-            {
-                folder: options.folder || "studysync",
-                resource_type: "image",
-                transformation: [
-                    { width: 400, height: 400, crop: "fill", gravity: "face" },
-                    { quality: "auto", fetch_format: "auto" },
-                ],
-                ...options,
-            },
-            (error, result) => {
-                if (error) {
-                    return reject(error);
-                }
-                resolve(result);
-            }
-        );
-
-        uploadStream.end(fileBuffer);
-    });
-};
-
-/**
- * Delete an image asset from Cloudinary by public ID.
- *
- * @param {string} publicId
- * @returns {Promise<Object>}
- */
-const deleteFromCloudinary = async (publicId) => {
-    try {
-        return await cloudinary.uploader.destroy(publicId);
-    } catch (error) {
-        console.error("Cloudinary destroy error:", error);
-        throw error;
-    }
-};
-
 module.exports = {
-    cloudinary,
     upload,
     uploadSingleImage,
-    uploadToCloudinary,
-    deleteFromCloudinary,
 };
