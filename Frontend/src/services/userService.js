@@ -10,9 +10,17 @@ import api from './api';
  * @param {File} file
  * @returns {Promise<Object>} { success, message, data: { user, profileImageURL } }
  */
-export const uploadProfileImage = async (file) => {
-  const formData = new FormData();
-  formData.append('image', file);
+export const uploadProfileImage = async (fileOrFormData) => {
+  let formData;
+  if (fileOrFormData instanceof FormData) {
+    formData = fileOrFormData;
+    if (!formData.has('image') && formData.has('profileImage')) {
+      formData.append('image', formData.get('profileImage'));
+    }
+  } else {
+    formData = new FormData();
+    formData.append('image', fileOrFormData);
+  }
 
   const response = await api.post('/api/users/profile-image', formData, {
     headers: {

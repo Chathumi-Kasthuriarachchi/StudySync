@@ -75,12 +75,9 @@ const Profile = () => {
       return;
     }
 
-    const formData = new FormData();
-    formData.append('profileImage', file);
-
     try {
       setIsUploading(true);
-      const res = await uploadProfileImage(formData);
+      const res = await uploadProfileImage(file);
       if (res.success && res.data?.user) {
         updateUser(res.data.user);
         toast.success('Profile photo updated successfully.');
