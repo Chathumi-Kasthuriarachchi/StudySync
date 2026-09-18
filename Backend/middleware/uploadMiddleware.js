@@ -33,7 +33,12 @@ const upload = multer({
  * Returns 400 JSON errors for file size limits or invalid formats.
  */
 const uploadSingleImage = (fieldName = "image") => {
-    const uploadHandler = upload.single(fieldName);
+    // Accept either the specified field name, 'image', or 'profileImage' for robustness
+    const fieldsToAccept = Array.from(new Set([fieldName, "image", "profileImage"])).map(
+        (name) => ({ name, maxCount: 1 })
+    );
+    const uploadHandler = upload.fields(fieldsToAccept);
+
     return (req, res, next) => {
         uploadHandler(req, res, (err) => {
             if (err instanceof multer.MulterError) {
@@ -53,6 +58,16 @@ const uploadSingleImage = (fieldName = "image") => {
                     message: err.message || "Invalid image upload.",
                 });
             }
+
+            // Normalize single file to req.file so downstream controllers work transparently
+            if (req.files) {
+                req.file =
+                    req.files[fieldName]?.[0] ||
+                    req.files.image?.[0] ||
+                    req.files.profileImage?.[0] ||
+                    null;
+            }
+
             next();
         });
     };
