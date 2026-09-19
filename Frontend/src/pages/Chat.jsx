@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import * as chatService from '../services/chatService';
+import socketService from '../services/socketService';
 import toast from 'react-hot-toast';
 
 /**
@@ -94,6 +95,41 @@ const Avatar = ({ name, imageUrl, size = 'md', className = '' }) => {
         getInitials(name)
       )}
     </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPER: Connection Status Badge
+// ─────────────────────────────────────────────────────────────────────────────
+const ConnectionBadge = ({ status }) => {
+  const configs = {
+    connected: {
+      dot: 'bg-emerald-500',
+      label: 'Connected',
+      className: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40',
+    },
+    connecting: {
+      dot: 'bg-amber-500 animate-pulse',
+      label: 'Reconnecting...',
+      className: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800/40',
+    },
+    disconnected: {
+      dot: 'bg-rose-500',
+      label: 'Offline',
+      className: 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800/40',
+    },
+  };
+
+  const config = configs[status] || configs.disconnected;
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium border ${config.className} transition-all duration-200 shrink-0`}
+      title={`Connection: ${config.label}`}
+    >
+      <span className={`w-2 h-2 rounded-full ${config.dot}`} />
+      <span>{config.label}</span>
+    </span>
   );
 };
 
@@ -217,7 +253,7 @@ const NewConversationModal = ({ onClose, onCreated }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // CONVERSATION LIST PANEL
 // ─────────────────────────────────────────────────────────────────────────────
-const ConversationList = ({ conversations, activeId, onSelect, onNewConversation, loading, currentUser }) => {
+const ConversationList = ({ conversations, activeId, onSelect, onNewConversation, loading, currentUser, connectionStatus }) => {
   const [filter, setFilter] = useState('');
 
   const projectConvos = conversations.filter((c) => c.type === 'PROJECT');
@@ -265,7 +301,10 @@ const ConversationList = ({ conversations, activeId, onSelect, onNewConversation
       {/* Header */}
       <div className="px-4 pt-5 pb-3">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Chat</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Chat</h2>
+            <ConnectionBadge status={connectionStatus} />
+          </div>
           <button
             onClick={onNewConversation}
             className="p-2 rounded-xl bg-powder-50 dark:bg-powder-950/40 text-powder-600 dark:text-powder-400 hover:bg-powder-100 dark:hover:bg-powder-900/50 transition"
@@ -419,7 +458,7 @@ const ConversationList = ({ conversations, activeId, onSelect, onNewConversation
 // ─────────────────────────────────────────────────────────────────────────────
 // MESSAGE VIEW PANEL
 // ─────────────────────────────────────────────────────────────────────────────
-const MessageView = ({ conversation, currentUser, onBack }) => {
+const MessageView = ({ conversation, currentUser, onBack, connectionStatus }) => {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -442,7 +481,11 @@ const MessageView = ({ conversation, currentUser, onBack }) => {
       const fetched = data.messages || [];
 
       if (append) {
-        setMessages((prev) => [...prev, ...fetched]);
+        setMessages((prev) => {
+          const prevIds = new Set(prev.map((m) => m._id));
+          const uniqueIncoming = fetched.filter((m) => !prevIds.has(m._id));
+          return [...prev, ...uniqueIncoming];
+        });
       } else {
         setMessages(fetched);
       }
@@ -456,12 +499,66 @@ const MessageView = ({ conversation, currentUser, onBack }) => {
     }
   }, [conversation._id]);
 
+  // Load initial messages & join Socket.IO room
   useEffect(() => {
     setPage(1);
     loadMessages(1);
+
+    socketService.joinConversation(conversation._id).catch((err) => {
+      console.warn('Socket joinConversation warning:', err.message);
+    });
+
+    return () => {
+      socketService.leaveConversation(conversation._id);
+    };
   }, [conversation._id, loadMessages]);
 
-  // Scroll to bottom on initial load or new message sent
+  // Listen for real-time incoming messages
+  useEffect(() => {
+    const unsubscribe = socketService.onNewMessage((newMsg) => {
+      if (newMsg.conversation === conversation._id) {
+        setMessages((prev) => {
+          // Prevent duplicates by checking message ID
+          if (prev.some((m) => m._id === newMsg._id)) {
+            return prev;
+          }
+          return [newMsg, ...prev];
+        });
+
+        // Scroll to bottom on new message
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 50);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [conversation._id]);
+
+  // Listen for reconnection: rejoin room & catch up missed messages
+  useEffect(() => {
+    const unsubscribe = socketService.onReconnect(async () => {
+      try {
+        await socketService.joinConversation(conversation._id);
+        const data = await chatService.getMessages(conversation._id, { page: 1, limit: 30 });
+        if (data.messages) {
+          setMessages((prev) => {
+            const map = new Map(prev.map((m) => [m._id, m]));
+            data.messages.forEach((m) => map.set(m._id, m));
+            return Array.from(map.values()).sort(
+              (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+            );
+          });
+        }
+      } catch (err) {
+        console.warn('Reconnection catchup error:', err.message);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [conversation._id]);
+
+  // Scroll to bottom on initial load
   useEffect(() => {
     if (!loading && page === 1 && messages.length > 0) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
@@ -482,15 +579,32 @@ const MessageView = ({ conversation, currentUser, onBack }) => {
     setSending(true);
 
     try {
-      const data = await chatService.sendMessage(conversation._id, content);
-      const msg = data.message;
-      setMessages((prev) => [msg, ...prev]);
-      // Scroll to bottom after sending
+      let msg;
+      if (socketService.isConnected()) {
+        try {
+          msg = await socketService.sendMessage(conversation._id, content);
+        } catch (socketErr) {
+          console.warn('Socket send failed, falling back to REST:', socketErr.message);
+          const data = await chatService.sendMessage(conversation._id, content);
+          msg = data.message;
+        }
+      } else {
+        const data = await chatService.sendMessage(conversation._id, content);
+        msg = data.message;
+      }
+
+      if (msg) {
+        setMessages((prev) => {
+          if (prev.some((m) => m._id === msg._id)) return prev;
+          return [msg, ...prev];
+        });
+      }
+
       setTimeout(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, 50);
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to send message');
+      toast.error(err.response?.data?.message || err.message || 'Failed to send message');
       setNewMessage(content); // Restore message on failure
     } finally {
       setSending(false);
@@ -561,9 +675,14 @@ const MessageView = ({ conversation, currentUser, onBack }) => {
         )}
 
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
-            {getConversationName()}
-          </h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
+              {getConversationName()}
+            </h3>
+            {connectionStatus !== 'connected' && (
+              <ConnectionBadge status={connectionStatus} />
+            )}
+          </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
             {getConversationSubtext()}
           </p>
@@ -737,8 +856,41 @@ const Chat = () => {
   const [loading, setLoading] = useState(true);
   const [showNewModal, setShowNewModal] = useState(false);
   const [mobileShowMessages, setMobileShowMessages] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState('disconnected');
 
-  // Load conversations
+  // Socket connection & lifecycle listeners
+  useEffect(() => {
+    socketService.connect();
+
+    const unsubStatus = socketService.onStatusChange((status) => {
+      setConnectionStatus(status);
+    });
+
+    const unsubConvo = socketService.onConversationUpdated((data) => {
+      setConversations((prev) => {
+        const index = prev.findIndex((c) => c._id === data.conversationId);
+        if (index === -1) return prev;
+        const updated = [...prev];
+        updated[index] = {
+          ...updated[index],
+          lastMessage: data.lastMessage,
+          lastMessageAt: data.lastMessageAt,
+        };
+        return updated.sort((a, b) => {
+          const dateA = new Date(a.lastMessageAt || a.updatedAt || 0);
+          const dateB = new Date(b.lastMessageAt || b.updatedAt || 0);
+          return dateB - dateA;
+        });
+      });
+    });
+
+    return () => {
+      unsubStatus();
+      unsubConvo();
+    };
+  }, []);
+
+  // Load conversations via REST
   useEffect(() => {
     const load = async () => {
       try {
@@ -790,6 +942,7 @@ const Chat = () => {
           onNewConversation={() => setShowNewModal(true)}
           loading={loading}
           currentUser={user}
+          connectionStatus={connectionStatus}
         />
       </div>
 
@@ -805,6 +958,7 @@ const Chat = () => {
             conversation={activeConversation}
             currentUser={user}
             onBack={handleBack}
+            connectionStatus={connectionStatus}
           />
         ) : (
           /* Empty State */
