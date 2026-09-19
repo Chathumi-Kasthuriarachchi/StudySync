@@ -22,15 +22,28 @@ const MessageSchema = new mongoose.Schema(
         },
         encryptedContent: {
             type: String,
-            required: [true, "Message content is required"],
+            default: null,
+            validate: {
+                validator: function (v) {
+                    return (v && v.trim().length > 0) || (this.attachment && this.attachment.storageKey);
+                },
+                message: "Message must have either text content or an attachment",
+            },
         },
         messageType: {
             type: String,
             enum: {
-                values: ["TEXT"],
+                values: ["TEXT", "IMAGE", "FILE", "VIDEO", "AUDIO"],
                 message: "{VALUE} is not a valid message type",
             },
             default: "TEXT",
+        },
+        attachment: {
+            originalName: { type: String },
+            storageKey: { type: String },
+            mimeType: { type: String },
+            size: { type: Number },
+            uploadedAt: { type: Date, default: Date.now },
         },
     },
     {

@@ -215,11 +215,35 @@ const buildProfileImageKey = (userId, fileName) => {
     return `studysync/users/${userId}/profile/avatar_${timestamp}_${random}.${ext}`;
 };
 
+/**
+ * Build a standardized S3 key for a chat attachment.
+ * Path format: studysync/chat/<project|direct>/<conversationId>/<timestamp>_<random>_<safe_filename>
+ *
+ * @param {string} conversationId   - MongoDB conversation ID
+ * @param {string} conversationType - "PROJECT" or "DIRECT"
+ * @param {string} fileName         - Original file name
+ * @returns {string}                - S3 object key
+ */
+const buildChatAttachmentKey = (conversationId, conversationType, fileName) => {
+    const type = (conversationType || "direct").toLowerCase();
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 10);
+    // Strip directory paths and sanitize filename
+    const baseName = (fileName || "attachment").replace(/^.*[\\/]/, "");
+    const safeName = baseName
+        .replace(/[^a-zA-Z0-9._-]/g, "_")
+        .replace(/\.{2,}/g, ".")
+        .replace(/_{2,}/g, "_");
+    return `studysync/chat/${type}/${conversationId}/${timestamp}_${random}_${safeName}`;
+};
+
 module.exports = {
     uploadFile,
     deleteFile,
     generatePresignedUrl,
     getFileMetadata,
     buildProfileImageKey,
+    buildChatAttachmentKey,
     DEFAULT_PRESIGNED_EXPIRY,
 };
+

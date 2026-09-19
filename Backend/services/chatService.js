@@ -6,14 +6,50 @@ const User = require("../models/User");
 const { encrypt, decrypt } = require("../utils/encryption");
 const notificationService = require("./notificationService");
 const { NOTIFICATION_TYPES, SOURCE_TYPES } = require("../constants/notificationConstants");
+const {
+    uploadFile,
+    deleteFile,
+    generatePresignedUrl,
+    buildChatAttachmentKey,
+} = require("./s3Service");
+const { ALLOWED_MIME_TYPES } = require("../middleware/chatUploadMiddleware");
+const socketService = require("./socketService");
+const socketEvents = require("../constants/socketEvents");
 
 /**
- * Chat Service — Phase 15
+ * Chat Service — Phase 15 & 18
  *
- * Core business logic for chat conversations and messages.
+ * Core business logic for chat conversations, messages, and attachments.
  * Handles conversation access control, message encryption/decryption,
- * and pagination.
+ * S3 attachment storage, presigned URLs, and pagination.
  */
+
+/**
+ * Helper to decrypt and format the lastMessage preview for a conversation.
+ */
+const formatLastMessage = (lastMsg) => {
+    if (!lastMsg) return null;
+    const formatted = { ...lastMsg };
+    let content = "";
+    if (lastMsg.encryptedContent) {
+        try {
+            content = decrypt(lastMsg.encryptedContent);
+        } catch {
+            content = "[Unable to decrypt]";
+        }
+    }
+    // If content is empty or absent, format a friendly preview based on messageType
+    if (!content && lastMsg.messageType && lastMsg.messageType !== "TEXT") {
+        const type = lastMsg.messageType;
+        if (type === "IMAGE") content = "📷 Photo";
+        else if (type === "VIDEO") content = "🎥 Video";
+        else if (type === "AUDIO") content = "🎵 Audio";
+        else if (type === "FILE") content = `📎 ${lastMsg.attachment?.originalName || "Attachment"}`;
+    }
+    formatted.content = content;
+    delete formatted.encryptedContent;
+    return formatted;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONVERSATION OPERATIONS
@@ -41,7 +77,7 @@ const getUserConversations = async (userId) => {
         .populate("participants", "_id name email profileImageURL")
         .populate({
             path: "lastMessage",
-            select: "sender encryptedContent createdAt",
+            select: "sender encryptedContent messageType attachment createdAt",
             populate: { path: "sender", select: "_id name" },
         })
         .sort({ lastMessageAt: -1, updatedAt: -1 })
@@ -50,20 +86,8 @@ const getUserConversations = async (userId) => {
     // Decrypt last message preview for each conversation
     const result = conversations.map((conv) => {
         const formatted = { ...conv };
-        if (conv.lastMessage && conv.lastMessage.encryptedContent) {
-            try {
-                formatted.lastMessage = {
-                    ...conv.lastMessage,
-                    content: decrypt(conv.lastMessage.encryptedContent),
-                };
-                delete formatted.lastMessage.encryptedContent;
-            } catch {
-                formatted.lastMessage = {
-                    ...conv.lastMessage,
-                    content: "[Unable to decrypt]",
-                };
-                delete formatted.lastMessage.encryptedContent;
-            }
+        if (conv.lastMessage) {
+            formatted.lastMessage = formatLastMessage(conv.lastMessage);
         }
         return formatted;
     });
@@ -120,19 +144,14 @@ const getOrCreateProjectConversation = async (projectId, userId) => {
         .populate("participants", "_id name email profileImageURL")
         .populate({
             path: "lastMessage",
-            select: "sender encryptedContent createdAt",
+            select: "sender encryptedContent messageType attachment createdAt",
             populate: { path: "sender", select: "_id name" },
         })
         .lean();
 
-    // Decrypt last message if present
-    if (conversation.lastMessage && conversation.lastMessage.encryptedContent) {
-        try {
-            conversation.lastMessage.content = decrypt(conversation.lastMessage.encryptedContent);
-        } catch {
-            conversation.lastMessage.content = "[Unable to decrypt]";
-        }
-        delete conversation.lastMessage.encryptedContent;
+    // Decrypt and format last message if present
+    if (conversation.lastMessage) {
+        conversation.lastMessage = formatLastMessage(conversation.lastMessage);
     }
 
     return conversation;
@@ -187,19 +206,14 @@ const getOrCreateDirectConversation = async (userId, targetUserId) => {
         .populate("participants", "_id name email profileImageURL")
         .populate({
             path: "lastMessage",
-            select: "sender encryptedContent createdAt",
+            select: "sender encryptedContent messageType attachment createdAt",
             populate: { path: "sender", select: "_id name" },
         })
         .lean();
 
-    // Decrypt last message if present
-    if (conversation.lastMessage && conversation.lastMessage.encryptedContent) {
-        try {
-            conversation.lastMessage.content = decrypt(conversation.lastMessage.encryptedContent);
-        } catch {
-            conversation.lastMessage.content = "[Unable to decrypt]";
-        }
-        delete conversation.lastMessage.encryptedContent;
+    // Decrypt and format last message if present
+    if (conversation.lastMessage) {
+        conversation.lastMessage = formatLastMessage(conversation.lastMessage);
     }
 
     return conversation;
@@ -222,7 +236,7 @@ const getConversationById = async (conversationId, userId) => {
         .populate("participants", "_id name email profileImageURL")
         .populate({
             path: "lastMessage",
-            select: "sender encryptedContent createdAt",
+            select: "sender encryptedContent messageType attachment createdAt",
             populate: { path: "sender", select: "_id name" },
         })
         .lean();
@@ -236,14 +250,9 @@ const getConversationById = async (conversationId, userId) => {
     // Verify access
     await verifyConversationAccess(conversation, userObjectId);
 
-    // Decrypt last message if present
-    if (conversation.lastMessage && conversation.lastMessage.encryptedContent) {
-        try {
-            conversation.lastMessage.content = decrypt(conversation.lastMessage.encryptedContent);
-        } catch {
-            conversation.lastMessage.content = "[Unable to decrypt]";
-        }
-        delete conversation.lastMessage.encryptedContent;
+    // Decrypt and format last message if present
+    if (conversation.lastMessage) {
+        conversation.lastMessage = formatLastMessage(conversation.lastMessage);
     }
 
     return conversation;
@@ -255,7 +264,7 @@ const getConversationById = async (conversationId, userId) => {
 
 /**
  * Get paginated messages for a conversation.
- * Decrypts message content before returning.
+ * Decrypts message content and generates presigned URLs for attachments.
  */
 const getMessages = async (conversationId, userId, options = {}) => {
     const userObjectId = new mongoose.Types.ObjectId(userId);
@@ -291,20 +300,46 @@ const getMessages = async (conversationId, userId, options = {}) => {
         Message.countDocuments({ conversation: conversationId }),
     ]);
 
-    // Decrypt message contents
-    const decryptedMessages = messages.map((msg) => {
-        const formatted = { ...msg };
-        try {
-            formatted.content = decrypt(msg.encryptedContent);
-        } catch {
-            formatted.content = "[Unable to decrypt]";
-        }
-        delete formatted.encryptedContent;
-        return formatted;
-    });
+    // Decrypt message contents and attach presigned URLs
+    const formattedMessages = await Promise.all(
+        messages.map(async (msg) => {
+            const formatted = { ...msg };
+            if (msg.encryptedContent) {
+                try {
+                    formatted.content = decrypt(msg.encryptedContent);
+                } catch {
+                    formatted.content = "[Unable to decrypt]";
+                }
+            } else {
+                formatted.content = "";
+            }
+            delete formatted.encryptedContent;
+
+            // Generate presigned URL for attachment if present
+            if (formatted.attachment && formatted.attachment.storageKey) {
+                try {
+                    const presignedUrl = await generatePresignedUrl(formatted.attachment.storageKey);
+                    formatted.attachment = {
+                        ...formatted.attachment,
+                        url: presignedUrl,
+                        downloadUrl: presignedUrl,
+                    };
+                } catch (presignErr) {
+                    console.warn(`Presigned URL warning for ${formatted.attachment.storageKey}:`, presignErr.message);
+                    formatted.attachment = {
+                        ...formatted.attachment,
+                        url: null,
+                        downloadUrl: null,
+                    };
+                }
+            }
+
+            return formatted;
+        })
+    );
 
     return {
-        messages: decryptedMessages,
+        messages: formattedMessages,
         page,
         limit,
         total,
@@ -461,6 +496,275 @@ const sendMessage = async (conversationId, userId, content, options = {}) => {
     return result;
 };
 
+/**
+ * Send an attachment message in a conversation.
+ * Uploads file to S3, encrypts optional caption, persists message in MongoDB,
+ * handles orphan cleanup if DB fails, emits Socket.IO events, and sends notifications.
+ */
+const sendAttachmentMessage = async (conversationId, userId, file, content = "", options = {}) => {
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+        const error = new Error("Invalid conversation ID format");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (!file || !file.buffer) {
+        const error = new Error("File is required for attachment upload");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    // Verify conversation exists and user has access
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+        const error = new Error("Conversation not found");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    await verifyConversationAccess(conversation.toObject(), userObjectId);
+
+    // Determine messageType from MIME type
+    const mimeInfo = ALLOWED_MIME_TYPES[file.mimetype];
+    const messageType = mimeInfo?.messageType || "FILE";
+
+    // Validate caption content if provided
+    let trimmedContent = "";
+    let encryptedContent = null;
+    if (content && typeof content === "string" && content.trim().length > 0) {
+        trimmedContent = content.trim();
+        if (trimmedContent.length > 5000) {
+            const error = new Error("Message caption cannot exceed 5000 characters");
+            error.statusCode = 400;
+            throw error;
+        }
+        try {
+            encryptedContent = encrypt(trimmedContent);
+        } catch (encErr) {
+            console.error("Attachment caption encryption failed:", encErr.message);
+            const error = new Error("Failed to process message caption");
+            error.statusCode = 500;
+            throw error;
+        }
+    }
+
+    // Construct S3 key
+    const s3Key = buildChatAttachmentKey(
+        conversationId,
+        conversation.type,
+        file.originalname
+    );
+
+    // Upload to S3
+    try {
+        await uploadFile(
+            file.buffer,
+            s3Key,
+            file.mimetype,
+            {
+                conversationId: conversationId.toString(),
+                senderId: userId.toString(),
+                originalName: encodeURIComponent(file.originalname || "attachment"),
+            }
+        );
+    } catch (s3Err) {
+        console.error("S3 upload failed for chat attachment:", s3Err.message);
+        const error = new Error(`Failed to upload attachment: ${s3Err.message}`);
+        error.statusCode = 500;
+        throw error;
+    }
+
+    // Create Message in MongoDB, ensuring orphan cleanup on DB failure
+    let message;
+    try {
+        message = await Message.create({
+            conversation: conversationId,
+            sender: userObjectId,
+            encryptedContent,
+            messageType,
+            attachment: {
+                originalName: file.originalname,
+                storageKey: s3Key,
+                mimeType: file.mimetype,
+                size: file.size,
+                uploadedAt: new Date(),
+            },
+        });
+    } catch (dbErr) {
+        console.error("MongoDB message creation failed after S3 upload. Cleaning up orphaned S3 object:", s3Key);
+        await deleteFile(s3Key).catch((delErr) => {
+            console.error("Failed to delete orphaned S3 object:", delErr.message);
+        });
+        const error = new Error(`Failed to save message: ${dbErr.message}`);
+        error.statusCode = 500;
+        throw error;
+    }
+
+    // Update conversation's last message tracking
+    await Conversation.findByIdAndUpdate(conversationId, {
+        lastMessage: message._id,
+        lastMessageAt: message.createdAt,
+    });
+
+    // Generate immediate presigned URL for response
+    let presignedUrl = null;
+    try {
+        presignedUrl = await generatePresignedUrl(s3Key);
+    } catch (presignErr) {
+        console.warn("Presigned URL generation warning:", presignErr.message);
+    }
+
+    // Populate sender
+    const populatedMessage = await Message.findById(message._id)
+        .populate("sender", "_id name email profileImageURL")
+        .lean();
+
+    const result = {
+        ...populatedMessage,
+        content: trimmedContent,
+        attachment: {
+            ...populatedMessage.attachment,
+            url: presignedUrl,
+            downloadUrl: presignedUrl,
+        },
+    };
+    delete result.encryptedContent;
+
+    // Send notifications to other participants
+    try {
+        const senderUser = await User.findById(userObjectId).select("name").lean();
+        const senderName = senderUser ? senderUser.name : "Someone";
+
+        let notifTitle = "New Attachment";
+        let previewText = trimmedContent
+            ? `"${trimmedContent.substring(0, 60)}${trimmedContent.length > 60 ? "..." : ""}"`
+            : messageType === "IMAGE"
+            ? "sent a photo"
+            : messageType === "VIDEO"
+            ? "sent a video"
+            : messageType === "AUDIO"
+            ? "sent an audio file"
+            : `sent a file: ${file.originalname}`;
+
+        if (conversation.type === "PROJECT" && conversation.project) {
+            const Project = require("../models/Project");
+            const project = await Project.findById(conversation.project).select("name").lean();
+            if (project) {
+                notifTitle = `New Attachment in ${project.name}`;
+            }
+        } else if (conversation.type === "DIRECT") {
+            notifTitle = `New Message from ${senderName}`;
+        }
+
+        let notifMessage = `${senderName} ${previewText}`;
+
+        let recipientIds;
+        if (conversation.type === "PROJECT") {
+            const memberships = await ProjectMembership.find({ project: conversation.project }).select("user");
+            recipientIds = memberships
+                .map((m) => m.user.toString())
+                .filter((id) => id !== userObjectId.toString());
+        } else {
+            recipientIds = conversation.participants
+                .map((p) => p.toString())
+                .filter((id) => id !== userObjectId.toString());
+        }
+
+        if (options.skipNotificationUserIds && Array.isArray(options.skipNotificationUserIds)) {
+            const skipSet = new Set(options.skipNotificationUserIds.map((id) => id.toString()));
+            recipientIds = recipientIds.filter((id) => !skipSet.has(id));
+        }
+
+        if (recipientIds.length > 0) {
+            const notificationItems = recipientIds.map((recipientId) => ({
+                recipient: recipientId,
+                type: NOTIFICATION_TYPES.CHAT_MESSAGE,
+                title: notifTitle,
+                message: notifMessage,
+                sourceType: SOURCE_TYPES.CONVERSATION,
+                sourceId: conversationId,
+                project: conversation.project || null,
+                metadata: {
+                    conversationId,
+                    messageId: message._id,
+                    senderId: userObjectId,
+                    senderName,
+                },
+            }));
+
+            notificationService.createNotifications(notificationItems).catch((err) => {
+                console.error("Chat attachment notification creation failed:", err.message);
+            });
+        }
+    } catch (notifErr) {
+        console.error("Chat attachment notification error:", notifErr.message);
+    }
+
+    // Real-time Socket.IO emission
+    try {
+        const io = socketService.getIO();
+        if (io) {
+            const roomName = `conversation:${conversationId}`;
+            io.to(roomName).emit(socketEvents.MESSAGE_NEW, result);
+            io.to(roomName).emit(socketEvents.CONVERSATION_UPDATED, {
+                conversationId: conversationId.toString(),
+                lastMessage: result,
+                lastMessageAt: result.createdAt,
+            });
+        }
+    } catch (socketErr) {
+        // Socket.IO may not be initialized in non-server contexts (e.g. testing)
+    }
+
+    return result;
+};
+
+/**
+ * Generate a presigned download URL for an attachment in a conversation.
+ * Enforces conversation access authorization before issuing URL.
+ */
+const getAttachmentDownloadUrl = async (conversationId, messageId, userId) => {
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+
+    if (!mongoose.Types.ObjectId.isValid(conversationId) || !mongoose.Types.ObjectId.isValid(messageId)) {
+        const error = new Error("Invalid conversation or message ID format");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const conversation = await Conversation.findById(conversationId).lean();
+    if (!conversation) {
+        const error = new Error("Conversation not found");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    await verifyConversationAccess(conversation, userObjectId);
+
+    const message = await Message.findOne({
+        _id: messageId,
+        conversation: conversationId,
+    }).lean();
+
+    if (!message || !message.attachment || !message.attachment.storageKey) {
+        const error = new Error("Attachment not found for this message");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    // Generate a fresh presigned download URL (valid for 1 hour)
+    const downloadUrl = await generatePresignedUrl(message.attachment.storageKey, 3600);
+
+    return {
+        downloadUrl,
+        fileName: message.attachment.originalName,
+        mimeType: message.attachment.mimeType,
+        size: message.attachment.size,
+    };
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ACCESS CONTROL HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -505,5 +809,7 @@ module.exports = {
     getConversationById,
     getMessages,
     sendMessage,
+    sendAttachmentMessage,
+    getAttachmentDownloadUrl,
     verifyConversationAccess,
 };

@@ -43,8 +43,11 @@ const ConversationSchema = new mongoose.Schema(
     }
 );
 
-// One project conversation per project (sparse: ignores nulls for DIRECT type)
-ConversationSchema.index({ project: 1 }, { unique: true, sparse: true });
+// One project conversation per project (partialFilterExpression: only applies when type is PROJECT)
+ConversationSchema.index(
+    { project: 1 },
+    { unique: true, partialFilterExpression: { type: "PROJECT" } }
+);
 
 // Efficiently find conversations a user participates in
 ConversationSchema.index({ participants: 1 });

@@ -142,10 +142,75 @@ const sendMessage = async (req, res) => {
     }
 };
 
+/**
+ * @desc    Upload an attachment and send it as a message
+ * @route   POST /api/chat/conversations/:conversationId/attachments
+ * @access  Private
+ */
+const sendAttachment = async (req, res) => {
+    try {
+        const { content } = req.body;
+        const file = req.file;
+
+        if (!file) {
+            return res.status(400).json({
+                success: false,
+                message: "No attachment file provided",
+            });
+        }
+
+        const message = await chatService.sendAttachmentMessage(
+            req.params.conversationId,
+            req.user._id,
+            file,
+            content
+        );
+
+        return res.status(201).json({
+            success: true,
+            message,
+        });
+    } catch (err) {
+        console.error("sendAttachment error:", err);
+        return res.status(err.statusCode || 500).json({
+            success: false,
+            message: err.message || "Failed to upload and send attachment",
+        });
+    }
+};
+
+/**
+ * @desc    Get a presigned download URL for an attachment
+ * @route   GET /api/chat/conversations/:conversationId/messages/:messageId/attachment
+ * @access  Private
+ */
+const getAttachmentDownloadUrl = async (req, res) => {
+    try {
+        const data = await chatService.getAttachmentDownloadUrl(
+            req.params.conversationId,
+            req.params.messageId,
+            req.user._id
+        );
+
+        return res.status(200).json({
+            success: true,
+            ...data,
+        });
+    } catch (err) {
+        console.error("getAttachmentDownloadUrl error:", err);
+        return res.status(err.statusCode || 500).json({
+            success: false,
+            message: err.message || "Failed to get attachment download URL",
+        });
+    }
+};
+
 module.exports = {
     getConversations,
     createDirectConversation,
     getConversation,
     getMessages,
     sendMessage,
+    sendAttachment,
+    getAttachmentDownloadUrl,
 };
