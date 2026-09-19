@@ -14,16 +14,17 @@ import Avatar from './Avatar';
 import ConnectionBadge from './ConnectionBadge';
 import MessageBubble from './MessageBubble';
 import MessageComposer from './MessageComposer';
+import MediaLightbox from './MediaLightbox';
 import { formatDateDivider, isSameDay, isWithinMinutes } from './chatUtils';
 import * as chatService from '../../services/chatService';
 import socketService from '../../services/socketService';
 import toast from 'react-hot-toast';
 
 /**
- * MessageView Component — Phase 17
+ * MessageView Component — Phase 17 & 18
  * Right-panel message area featuring WhatsApp-Web-style conversation header,
- * grouped message bubbles, date dividers, intelligent auto-scroll with floating
- * unread pill, loading skeletons, and integrated composer.
+ * grouped message bubbles, rich media previews, full-screen lightbox,
+ * date dividers, intelligent auto-scroll with floating unread pill, and integrated composer.
  */
 const MessageView = ({
   conversation,
@@ -42,6 +43,27 @@ const MessageView = ({
   // Auto-scroll and floating "New messages ↓" pill state
   const [showScrollDown, setShowScrollDown] = useState(false);
   const [unreadBelowCount, setUnreadBelowCount] = useState(0);
+
+  // Media Lightbox state
+  const [lightboxMedia, setLightboxMedia] = useState({
+    isOpen: false,
+    src: '',
+    fileName: '',
+    fileSize: 0,
+  });
+
+  const handleOpenMedia = useCallback((media) => {
+    setLightboxMedia({
+      isOpen: true,
+      src: media.url,
+      fileName: media.originalName,
+      fileSize: media.size,
+    });
+  }, []);
+
+  const handleCloseMedia = useCallback(() => {
+    setLightboxMedia((prev) => ({ ...prev, isOpen: false }));
+  }, []);
 
   const messagesContainerRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -243,6 +265,34 @@ const MessageView = ({
       const data = await chatService.sendMessage(conversation._id, content);
       msg = data.message;
     }
+
+    if (msg) {
+      setMessages((prev) => {
+        if (prev.some((m) => m._id === msg._id)) return prev;
+        return [msg, ...prev];
+      });
+
+      // Notify parent to update conversation list preview immediately
+      if (onMessageSent) {
+        onMessageSent(conversation._id, msg);
+      }
+
+      setTimeout(() => {
+        scrollToBottomSmooth();
+      }, 30);
+    }
+  };
+
+  // ── Attachment Sending Handler ───────────────────────────────────────────
+  const handleSendAttachment = async (file, caption, onProgress) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (caption) {
+      formData.append('content', caption);
+    }
+
+    const res = await chatService.sendAttachment(conversation._id, formData, onProgress);
+    const msg = res.message;
 
     if (msg) {
       setMessages((prev) => {
@@ -472,6 +522,7 @@ const MessageView = ({
                     isFirstInGroup={item.isFirstInGroup}
                     isLastInGroup={item.isLastInGroup}
                     isGroupedWithPrev={item.isGroupedWithPrev}
+                    onOpenMedia={handleOpenMedia}
                   />
                 );
               })
@@ -505,8 +556,18 @@ const MessageView = ({
       {/* ── 4. Integrated Message Composer ─────────────────────────────────── */}
       <MessageComposer
         onSend={handleSend}
+        onSendAttachment={handleSendAttachment}
         disabled={loading || Boolean(error)}
         placeholder={`Message ${conversationName}...`}
+      />
+
+      {/* ── 5. Fullscreen Media Lightbox Modal ─────────────────────────────── */}
+      <MediaLightbox
+        isOpen={lightboxMedia.isOpen}
+        onClose={handleCloseMedia}
+        src={lightboxMedia.src}
+        fileName={lightboxMedia.fileName}
+        fileSize={lightboxMedia.fileSize}
       />
     </div>
   );

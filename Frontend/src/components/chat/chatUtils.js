@@ -107,3 +107,34 @@ export const isWithinMinutes = (dateStr1, dateStr2, minutes = 5) => {
   const diffMs = Math.abs(new Date(dateStr1).getTime() - new Date(dateStr2).getTime());
   return diffMs <= minutes * 60 * 1000;
 };
+
+/**
+ * Format file size in bytes to human-readable string
+ * e.g. "512 B", "2.4 MB", "12.8 KB"
+ */
+export const formatFileSize = (bytes) => {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+};
+
+/**
+ * Determine high-level category of an attachment based on mimeType and/or filename
+ */
+export const getFileCategory = (mimeType = '', fileName = '') => {
+  const mime = mimeType.toLowerCase();
+  const ext = fileName.split('.').pop()?.toLowerCase() || '';
+
+  if (mime.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+    return 'IMAGE';
+  }
+  if (mime.startsWith('video/') || ['mp4', 'webm', 'mov'].includes(ext)) {
+    return 'VIDEO';
+  }
+  if (mime.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'm4a'].includes(ext)) {
+    return 'AUDIO';
+  }
+  return 'FILE';
+};

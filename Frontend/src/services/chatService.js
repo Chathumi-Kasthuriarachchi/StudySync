@@ -35,6 +35,21 @@ export const searchUsers = async (query) => {
     return response.data;
 };
 
+export const sendAttachment = async (conversationId, formData, onUploadProgress) => {
+    const response = await api.post(`/api/chat/conversations/${conversationId}/attachments`, formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+        onUploadProgress,
+    });
+    return response.data;
+};
+
+export const getAttachmentDownloadUrl = async (conversationId, messageId) => {
+    const response = await api.get(`/api/chat/conversations/${conversationId}/messages/${messageId}/attachment`);
+    return response.data;
+};
+
 export default {
     getConversations,
     createDirectConversation,
@@ -42,4 +57,6 @@ export default {
     getMessages,
     sendMessage,
     searchUsers,
+    sendAttachment,
+    getAttachmentDownloadUrl,
 };

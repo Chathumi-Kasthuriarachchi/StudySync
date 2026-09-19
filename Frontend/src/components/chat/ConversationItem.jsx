@@ -39,9 +39,21 @@ const ConversationItem = ({
       ? 'You'
       : (conversation.lastMessage.sender?.name?.split(' ')[0] || 'Someone');
 
+    const msgType = conversation.lastMessage.messageType || 'TEXT';
     const content = conversation.lastMessage.content || '';
-    const truncated = content.length > 42 ? content.substring(0, 42) + '...' : content;
 
+    let previewText = content;
+    if (!previewText || msgType !== 'TEXT') {
+      if (msgType === 'IMAGE') previewText = content ? `📷 ${content}` : '📷 Photo';
+      else if (msgType === 'VIDEO') previewText = content ? `🎥 ${content}` : '🎥 Video';
+      else if (msgType === 'AUDIO') previewText = content ? `🎵 ${content}` : '🎵 Audio';
+      else if (msgType === 'FILE') {
+        const fileLabel = conversation.lastMessage.attachment?.originalName || 'Attachment';
+        previewText = content ? `📎 ${fileLabel} - ${content}` : `📎 ${fileLabel}`;
+      }
+    }
+
+    const truncated = previewText.length > 36 ? previewText.substring(0, 36) + '...' : previewText;
     return `${senderName}: ${truncated}`;
   };
 
