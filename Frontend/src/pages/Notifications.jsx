@@ -31,6 +31,7 @@ import { getNotificationVisuals } from '../components/notifications/Notification
 const FILTER_TABS = [
   { id: 'all', label: 'All' },
   { id: 'unread', label: 'Unread' },
+  { id: 'chat', label: 'Chat & Messages' },
   { id: 'tasks', label: 'Tasks & Deadlines' },
   { id: 'goals', label: 'Goals' },
   { id: 'comments', label: 'Comments & Mentions' },
@@ -116,7 +117,12 @@ const Notifications = () => {
     }
     if (activeTab === 'comments') {
       return notifications.filter((n) =>
-        ['COMMENT_ADDED', 'MENTIONED'].includes(n.type)
+        ['COMMENT_ADDED', 'MENTIONED', 'CHAT_MENTION'].includes(n.type)
+      );
+    }
+    if (activeTab === 'chat') {
+      return notifications.filter((n) =>
+        ['CHAT_MESSAGE', 'CHAT_MENTION'].includes(n.type) || n.sourceType === 'CONVERSATION'
       );
     }
     return notifications;

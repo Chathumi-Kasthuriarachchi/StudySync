@@ -239,6 +239,21 @@ class SocketService {
   }
 
   /**
+   * Subscribe to new in-app notifications in real time.
+   */
+  onNotificationNew(handler) {
+    if (!this.socket) this.connect();
+    if (this.socket) {
+      this.socket.on('notification:new', handler);
+    }
+    return () => {
+      if (this.socket) {
+        this.socket.off('notification:new', handler);
+      }
+    };
+  }
+
+  /**
    * Check if socket is currently connected.
    */
   isConnected() {

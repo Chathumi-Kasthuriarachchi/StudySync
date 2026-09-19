@@ -9,6 +9,7 @@ import {
   clearAllNotifications as apiClearAllNotifications,
   triggerDeadlineCheck as apiTriggerDeadlineCheck,
 } from '../services/notificationService';
+import socketService from '../services/socketService';
 
 const NotificationContext = createContext(null);
 
@@ -163,6 +164,24 @@ export const NotificationProvider = ({ children }) => {
       window.removeEventListener('focus', onFocus);
     };
   }, [user, fetchUnreadCount]);
+
+  // Real-time Socket.IO notification listener
+  useEffect(() => {
+    if (!user) return;
+
+    socketService.connect();
+    const unsub = socketService.onNotificationNew((newNotif) => {
+      setUnreadCount((count) => count + 1);
+      setRecentNotifications((prev) => {
+        if (prev.some((n) => n._id === newNotif._id)) return prev;
+        return [newNotif, ...prev.slice(0, 9)];
+      });
+    });
+
+    return () => {
+      unsub();
+    };
+  }, [user]);
 
   const value = {
     unreadCount,
