@@ -186,7 +186,32 @@ const sendEmail = async ({ to, subject, html }) => {
     }
 };
 
+/**
+ * sendSupportEmail
+ * Dispatches contact support inquiries to the support mailbox.
+ */
+const sendSupportEmail = async ({ name, email, subject, message }) => {
+    const supportEmail = process.env.SUPPORT_EMAIL || "support@studysync.app";
+    const htmlContent = baseTemplate(`
+        <h2 style="margin:0 0 8px 0;font-size:22px;font-weight:800;color:#0f172a;">New Support Inquiry</h2>
+        <p style="margin:0 0 16px 0;font-size:14px;color:#475569;">
+          You have received a new support ticket from <strong>${name}</strong> (&lt;${email}&gt;).
+        </p>
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin:20px 0;">
+          <p style="margin:0 0 8px 0;font-size:12px;font-weight:700;color:#0369a1;text-transform:uppercase;">Subject</p>
+          <p style="margin:0 0 16px 0;font-size:15px;font-weight:600;color:#0f172a;">${subject}</p>
+          <p style="margin:0 0 8px 0;font-size:12px;font-weight:700;color:#0369a1;text-transform:uppercase;">Message</p>
+          <p style="margin:0;font-size:14px;color:#334155;line-height:1.6;white-space:pre-wrap;">${message}</p>
+        </div>
+        <p style="margin:0;font-size:12px;color:#64748b;">Reply directly to this email or reach the user at ${email}.</p>
+    `);
+
+    return await sendEmail({ to: supportEmail, subject: `[Support Ticket] ${subject}`, html: htmlContent });
+};
+
 module.exports = {
     sendEmailVerificationOTP,
     sendPasswordResetOTP,
+    sendSupportEmail,
 };
+

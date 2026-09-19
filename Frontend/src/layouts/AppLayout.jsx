@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from '../components/layout/Sidebar';
 import TopBar from '../components/layout/TopBar';
+import { useTheme } from '../context/ThemeContext';
 
 /**
  * AppLayout
@@ -27,20 +28,8 @@ const AppLayout = () => {
   // Mobile drawer open state
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Dark mode state
-  const [darkMode, setDarkMode] = useState(() => {
-    return localStorage.getItem('studysync_theme') === 'dark';
-  });
-
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('studysync_theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('studysync_theme', 'light');
-    }
-  }, [darkMode]);
+  // Theme from unified ThemeContext
+  const { isDark, toggleTheme } = useTheme();
 
   const handleToggleCollapse = () => {
     setIsCollapsed((prev) => {
@@ -50,9 +39,6 @@ const AppLayout = () => {
     });
   };
 
-  const handleToggleTheme = () => {
-    setDarkMode((prev) => !prev);
-  };
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col overflow-x-hidden transition-colors duration-200">
@@ -75,8 +61,8 @@ const AppLayout = () => {
           onOpenMobile={() => setMobileOpen(true)}
           isCollapsed={isCollapsed}
           onToggleCollapse={handleToggleCollapse}
-          darkMode={darkMode}
-          onToggleTheme={handleToggleTheme}
+          darkMode={isDark}
+          onToggleTheme={toggleTheme}
         />
 
         {/* Dynamic Page Viewport */}

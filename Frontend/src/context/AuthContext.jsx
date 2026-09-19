@@ -124,6 +124,11 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // ── Update User State (e.g. Profile Image or Info changes) ──────────────────
+  const updateUser = useCallback((updatedData) => {
+    setUser((prev) => (prev ? { ...prev, ...updatedData } : null));
+  }, []);
+
   const value = {
     user,
     isAuthenticated: !!user,
@@ -131,6 +136,7 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
+    updateUser,
     refreshSession,
     checkAuth,
   };

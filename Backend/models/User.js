@@ -39,6 +39,48 @@ const UserSchema = new mongoose.Schema(
             type: String,
             default: null,
         },
+        profileImageS3Key: {
+            type: String,
+            default: null,
+        },
+        username: {
+            type: String,
+            unique: true,
+            sparse: true,
+            trim: true,
+            lowercase: true,
+            minlength: [3, "Username must be at least 3 characters long"],
+            maxlength: [30, "Username cannot exceed 30 characters"],
+            match: [
+                /^[a-zA-Z0-9_]+$/,
+                "Username can only contain letters, numbers, and underscores",
+            ],
+        },
+        bio: {
+            type: String,
+            trim: true,
+            maxlength: [500, "Bio cannot exceed 500 characters"],
+            default: "",
+        },
+        preferences: {
+            theme: {
+                type: String,
+                enum: {
+                    values: ["light", "dark", "system"],
+                    message: "{VALUE} is not a valid theme",
+                },
+                default: "system",
+            },
+            language: {
+                type: String,
+                default: "en",
+                trim: true,
+            },
+            emailNotifications: {
+                type: Boolean,
+                default: true,
+            },
+        },
 
         // ── Email Verification ──────────────────────────────────────────────────
         emailVerified: {

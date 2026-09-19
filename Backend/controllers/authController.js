@@ -34,6 +34,24 @@ const generateResetToken = (email) => {
     });
 };
 
+// ── User Response Serializer ──────────────────────────────────────────────────
+const formatAuthUser = (user) => ({
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    username: user.username || "",
+    bio: user.bio || "",
+    systemRole: user.systemRole,
+    profileImageURL: user.profileImageURL || null,
+    preferences: user.preferences || {
+        theme: "system",
+        language: "en",
+        emailNotifications: true,
+    },
+    emailVerified: user.emailVerified,
+    createdAt: user.createdAt,
+});
+
 // ═════════════════════════════════════════════════════════════════════════════
 // REGISTRATION
 // ═════════════════════════════════════════════════════════════════════════════
@@ -271,14 +289,7 @@ const login = async (req, res) => {
             success: true,
             message: "Login successful.",
             data: {
-                user: {
-                    id: user._id,
-                    name: user.name,
-                    email: user.email,
-                    systemRole: user.systemRole,
-                    emailVerified: user.emailVerified,
-                    createdAt: user.createdAt,
-                },
+                user: formatAuthUser(user),
                 accessToken,
             },
         });
@@ -339,13 +350,7 @@ const refreshToken = async (req, res) => {
             success: true,
             data: {
                 accessToken,
-                user: {
-                    id: user._id,
-                    name: user.name,
-                    email: user.email,
-                    systemRole: user.systemRole,
-                    emailVerified: user.emailVerified,
-                },
+                user: formatAuthUser(user),
             },
         });
     } catch (error) {
@@ -519,15 +524,7 @@ const getMe = async (req, res) => {
         return res.status(200).json({
             success: true,
             data: {
-                user: {
-                    id: req.user._id,
-                    name: req.user.name,
-                    email: req.user.email,
-                    systemRole: req.user.systemRole,
-                    emailVerified: req.user.emailVerified,
-                    createdAt: req.user.createdAt,
-                    profileImageURL: req.user.profileImageURL,
-                },
+                user: formatAuthUser(req.user),
             },
         });
     } catch (error) {
@@ -566,6 +563,31 @@ const updateProfile = async (req, res) => {
         if (!user) return res.status(404).json({ success: false, message: "User not found." });
 
         if (req.body.name) user.name = req.body.name.trim();
+        if (req.body.username !== undefined) {
+            const trimmedUsername = req.body.username.trim().toLowerCase();
+            if (trimmedUsername.length > 0) {
+                const usernameRegex = /^[a-zA-Z0-9_]{3,30}$/;
+                if (!usernameRegex.test(trimmedUsername)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Username must be 3-30 characters and contain only letters, numbers, and underscores.",
+                    });
+                }
+                const existing = await User.findOne({ username: trimmedUsername, _id: { $ne: user._id } });
+                if (existing) {
+                    return res.status(409).json({ success: false, message: "Username is already taken." });
+                }
+                user.username = trimmedUsername;
+            } else {
+                user.username = undefined;
+            }
+        }
+        if (req.body.bio !== undefined) {
+            if (req.body.bio.length > 500) {
+                return res.status(400).json({ success: false, message: "Bio cannot exceed 500 characters." });
+            }
+            user.bio = req.body.bio.trim();
+        }
         if (req.body.password) {
             const pwError = validatePasswordStrength(req.body.password);
             if (pwError) return res.status(400).json({ success: false, message: pwError });
@@ -578,7 +600,7 @@ const updateProfile = async (req, res) => {
         return res.status(200).json({
             success: true,
             message: "Profile updated successfully.",
-            data: { user: { id: user._id, name: user.name, email: user.email, systemRole: user.systemRole } },
+            data: { user: formatAuthUser(user) },
         });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Server error updating profile." });

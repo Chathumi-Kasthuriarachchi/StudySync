@@ -129,8 +129,16 @@ const TopBar = ({
 
           {/* User Quick Info */}
           <div className="flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-slate-800">
-            <div className="w-8 h-8 rounded-xl bg-powder-100 dark:bg-powder-900/60 text-powder-700 dark:text-powder-300 font-bold flex items-center justify-center text-xs border border-powder-200 dark:border-powder-800/60 shadow-xs">
-              {getInitials(user?.name)}
+            <div className="w-8 h-8 rounded-xl overflow-hidden bg-powder-100 dark:bg-powder-900/60 text-powder-700 dark:text-powder-300 font-bold flex items-center justify-center text-xs border border-powder-200 dark:border-powder-800/60 shadow-xs shrink-0">
+              {user?.profileImageURL ? (
+                <img
+                  src={user.profileImageURL}
+                  alt={user?.name || 'User'}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                getInitials(user?.name)
+              )}
             </div>
             <div className="hidden sm:flex flex-col text-left">
               <span className="text-xs font-semibold text-slate-900 dark:text-white leading-tight">

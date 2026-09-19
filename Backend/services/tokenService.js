@@ -193,6 +193,72 @@ const clearRefreshCookie = (res) => {
     });
 };
 
+/**
+ * parseUserAgent
+ * Friendly device & browser parser
+ */
+const parseUserAgent = (userAgent) => {
+    if (!userAgent) {
+        return { browser: "Web Browser", os: "Unknown Device", deviceType: "desktop", displayName: "Web Browser • Unknown Device" };
+    }
+
+    let browser = "Web Browser";
+    if (/edg/i.test(userAgent)) browser = "Microsoft Edge";
+    else if (/chrome|crios/i.test(userAgent)) browser = "Google Chrome";
+    else if (/firefox|fxios/i.test(userAgent)) browser = "Mozilla Firefox";
+    else if (/safari/i.test(userAgent)) browser = "Apple Safari";
+    else if (/opera|opr/i.test(userAgent)) browser = "Opera";
+
+    let os = "Unknown OS";
+    let deviceType = "desktop";
+    if (/windows/i.test(userAgent)) os = "Windows";
+    else if (/macintosh|mac os x/i.test(userAgent)) os = "macOS";
+    else if (/linux/i.test(userAgent)) os = "Linux";
+    else if (/android/i.test(userAgent)) {
+        os = "Android";
+        deviceType = "mobile";
+    } else if (/iphone|ipad|ipod/i.test(userAgent)) {
+        os = "iOS";
+        deviceType = "mobile";
+    }
+
+    return {
+        browser,
+        os,
+        deviceType,
+        displayName: `${browser} • ${os}`,
+    };
+};
+
+/**
+ * getUserActiveSessions
+ * Returns sanitized non-sensitive session metadata for user
+ */
+const getUserActiveSessions = async (userId, currentRefreshToken = null) => {
+    const currentTokenHash = currentRefreshToken ? hashToken(currentRefreshToken) : null;
+
+    const sessions = await RefreshTokenSession.find({
+        userId,
+        revoked: false,
+        expiresAt: { $gt: new Date() },
+    }).sort({ updatedAt: -1 });
+
+    return sessions.map((s) => {
+        const uaInfo = parseUserAgent(s.userAgent);
+        return {
+            id: s._id.toString(),
+            browser: uaInfo.browser,
+            os: uaInfo.os,
+            displayName: uaInfo.displayName,
+            deviceType: uaInfo.deviceType,
+            ipAddress: s.ipAddress || "Unknown IP",
+            lastActive: s.updatedAt || s.createdAt,
+            createdAt: s.createdAt,
+            isCurrent: Boolean(currentTokenHash && s.tokenHash === currentTokenHash),
+        };
+    });
+};
+
 module.exports = {
     generateAccessToken,
     generateRefreshToken,
@@ -206,4 +272,7 @@ module.exports = {
     setRefreshCookie,
     clearRefreshCookie,
     REFRESH_COOKIE_NAME,
+    parseUserAgent,
+    getUserActiveSessions,
 };
+
