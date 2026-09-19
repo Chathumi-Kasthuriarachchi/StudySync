@@ -37,6 +37,19 @@ const ConversationSchema = new mongoose.Schema(
             type: Date,
             default: null,
         },
+        // Phase 19: Per-user read tracking for unread counts and delivery status
+        readState: [
+            {
+                user: {
+                    type: mongoose.Schema.Types.ObjectId,
+                    ref: "User",
+                },
+                lastReadAt: {
+                    type: Date,
+                    default: Date.now,
+                },
+            },
+        ],
     },
     {
         timestamps: true,
@@ -54,5 +67,8 @@ ConversationSchema.index({ participants: 1 });
 
 // Sort conversations by most recent activity
 ConversationSchema.index({ type: 1, lastMessageAt: -1 });
+
+// Lookup read states by user
+ConversationSchema.index({ "readState.user": 1 });
 
 module.exports = mongoose.model("Conversation", ConversationSchema);

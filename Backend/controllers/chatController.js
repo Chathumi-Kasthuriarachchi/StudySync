@@ -121,12 +121,13 @@ const getMessages = async (req, res) => {
  */
 const sendMessage = async (req, res) => {
     try {
-        const { content } = req.body;
+        const { content, replyTo } = req.body;
 
         const message = await chatService.sendMessage(
             req.params.conversationId,
             req.user._id,
-            content
+            content,
+            { replyTo, emitSocket: true }
         );
 
         return res.status(201).json({
@@ -149,7 +150,7 @@ const sendMessage = async (req, res) => {
  */
 const sendAttachment = async (req, res) => {
     try {
-        const { content } = req.body;
+        const { content, replyTo } = req.body;
         const file = req.file;
 
         if (!file) {
@@ -163,7 +164,8 @@ const sendAttachment = async (req, res) => {
             req.params.conversationId,
             req.user._id,
             file,
-            content
+            content,
+            { replyTo }
         );
 
         return res.status(201).json({
@@ -205,6 +207,166 @@ const getAttachmentDownloadUrl = async (req, res) => {
     }
 };
 
+/**
+ * @desc    Edit a message (Sender-only)
+ * @route   PATCH /api/chat/conversations/:conversationId/messages/:messageId
+ * @access  Private
+ */
+const editMessage = async (req, res) => {
+    try {
+        const { content } = req.body;
+        const updated = await chatService.editMessage(
+            req.params.conversationId,
+            req.params.messageId,
+            req.user._id,
+            content
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: updated,
+        });
+    } catch (err) {
+        console.error("editMessage error:", err);
+        return res.status(err.statusCode || 500).json({
+            success: false,
+            message: err.message || "Failed to edit message",
+        });
+    }
+};
+
+/**
+ * @desc    Soft delete a message (Sender-only)
+ * @route   DELETE /api/chat/conversations/:conversationId/messages/:messageId
+ * @access  Private
+ */
+const deleteMessage = async (req, res) => {
+    try {
+        const result = await chatService.deleteMessage(
+            req.params.conversationId,
+            req.params.messageId,
+            req.user._id
+        );
+
+        return res.status(200).json({
+            success: true,
+            ...result,
+        });
+    } catch (err) {
+        console.error("deleteMessage error:", err);
+        return res.status(err.statusCode || 500).json({
+            success: false,
+            message: err.message || "Failed to delete message",
+        });
+    }
+};
+
+/**
+ * @desc    Add a reaction to a message
+ * @route   POST /api/chat/conversations/:conversationId/messages/:messageId/reactions
+ * @access  Private
+ */
+const addReaction = async (req, res) => {
+    try {
+        const { emoji } = req.body;
+        const reactions = await chatService.addReaction(
+            req.params.conversationId,
+            req.params.messageId,
+            req.user._id,
+            emoji
+        );
+
+        return res.status(200).json({
+            success: true,
+            reactions,
+        });
+    } catch (err) {
+        console.error("addReaction error:", err);
+        return res.status(err.statusCode || 500).json({
+            success: false,
+            message: err.message || "Failed to add reaction",
+        });
+    }
+};
+
+/**
+ * @desc    Remove a reaction from a message
+ * @route   DELETE /api/chat/conversations/:conversationId/messages/:messageId/reactions
+ * @access  Private
+ */
+const removeReaction = async (req, res) => {
+    try {
+        const reactions = await chatService.removeReaction(
+            req.params.conversationId,
+            req.params.messageId,
+            req.user._id
+        );
+
+        return res.status(200).json({
+            success: true,
+            reactions,
+        });
+    } catch (err) {
+        console.error("removeReaction error:", err);
+        return res.status(err.statusCode || 500).json({
+            success: false,
+            message: err.message || "Failed to remove reaction",
+        });
+    }
+};
+
+/**
+ * @desc    Mark conversation as read for authenticated user
+ * @route   POST /api/chat/conversations/:conversationId/read
+ * @access  Private
+ */
+const markConversationRead = async (req, res) => {
+    try {
+        const result = await chatService.markConversationRead(
+            req.params.conversationId,
+            req.user._id
+        );
+
+        return res.status(200).json({
+            success: true,
+            ...result,
+        });
+    } catch (err) {
+        console.error("markConversationRead error:", err);
+        return res.status(err.statusCode || 500).json({
+            success: false,
+            message: err.message || "Failed to mark conversation as read",
+        });
+    }
+};
+
+/**
+ * @desc    Search messages in a conversation
+ * @route   GET /api/chat/conversations/:conversationId/search
+ * @access  Private
+ */
+const searchMessages = async (req, res) => {
+    try {
+        const { q } = req.query;
+        const result = await chatService.searchMessages(
+            req.params.conversationId,
+            req.user._id,
+            q
+        );
+
+        return res.status(200).json({
+            success: true,
+            ...result,
+        });
+    } catch (err) {
+        console.error("searchMessages error:", err);
+        return res.status(err.statusCode || 500).json({
+            success: false,
+            message: err.message || "Failed to search messages",
+        });
+    }
+};
+
 module.exports = {
     getConversations,
     createDirectConversation,
@@ -213,4 +375,11 @@ module.exports = {
     sendMessage,
     sendAttachment,
     getAttachmentDownloadUrl,
+    editMessage,
+    deleteMessage,
+    addReaction,
+    removeReaction,
+    markConversationRead,
+    searchMessages,
 };
+

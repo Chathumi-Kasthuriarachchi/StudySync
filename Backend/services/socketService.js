@@ -182,7 +182,7 @@ const init = (server, allowedOrigins = []) => {
         // ── 3. Send Message ─────────────────────────────────────────────────
         socket.on(socketEvents.MESSAGE_SEND, async (data, callback) => {
             try {
-                const { conversationId, content } = data || {};
+                const { conversationId, content, replyTo } = data || {};
 
                 // Rate limit check
                 if (isRateLimited(userId)) {
@@ -217,9 +217,11 @@ const init = (server, allowedOrigins = []) => {
 
                 // Find active users in this conversation room to avoid duplicate notifications (Requirement 17)
                 let activeUserIds = [];
+                let isDelivered = false;
                 try {
                     const roomSockets = await io.in(roomName).fetchSockets();
                     activeUserIds = roomSockets.map((s) => s.userId).filter(Boolean);
+                    isDelivered = activeUserIds.some((id) => id !== userId);
                 } catch (roomErr) {
                     console.warn("Could not fetch room sockets for notification suppression:", roomErr.message);
                 }
@@ -229,37 +231,26 @@ const init = (server, allowedOrigins = []) => {
                     conversationId,
                     userId,
                     content,
-                    { skipNotificationUserIds: activeUserIds }
+                    {
+                        skipNotificationUserIds: activeUserIds,
+                        replyTo,
+                        isDelivered,
+                    }
                 );
 
-                // Build safe payload to emit (strictly no encryption keys or internal metadata)
-                const safePayload = {
-                    _id: savedMessage._id,
-                    conversation: savedMessage.conversation,
-                    sender: {
-                        _id: savedMessage.sender?._id || userId,
-                        name: savedMessage.sender?.name || userName,
-                        email: savedMessage.sender?.email || socket.user.email,
-                        profileImageURL: savedMessage.sender?.profileImageURL || null,
-                    },
-                    content: savedMessage.content,
-                    messageType: savedMessage.messageType || "TEXT",
-                    createdAt: savedMessage.createdAt,
-                };
-
                 // Emit real-time message to everyone in the conversation room (including sender)
-                io.to(roomName).emit(socketEvents.MESSAGE_NEW, safePayload);
+                io.to(roomName).emit(socketEvents.MESSAGE_NEW, savedMessage);
 
                 // Emit conversation preview update to the room
                 io.to(roomName).emit(socketEvents.CONVERSATION_UPDATED, {
                     conversationId,
-                    lastMessage: safePayload,
-                    lastMessageAt: safePayload.createdAt,
+                    lastMessage: savedMessage,
+                    lastMessageAt: savedMessage.createdAt,
                 });
 
                 // Acknowledge to sender
                 if (typeof callback === "function") {
-                    callback({ success: true, message: safePayload });
+                    callback({ success: true, message: savedMessage });
                 }
             } catch (err) {
                 console.error("Socket message:send error:", err.message);
@@ -274,6 +265,144 @@ const init = (server, allowedOrigins = []) => {
                 };
                 if (typeof callback === "function") callback(errPayload);
                 socket.emit(socketEvents.ERROR, errPayload);
+            }
+        });
+
+        // ── 4. Edit Message ─────────────────────────────────────────────────
+        socket.on(socketEvents.MESSAGE_EDIT, async (data, callback) => {
+            try {
+                const { conversationId, messageId, content } = data || {};
+                if (!conversationId || !messageId || !content) {
+                    const errPayload = { success: false, message: "Missing conversationId, messageId, or content" };
+                    if (typeof callback === "function") callback(errPayload);
+                    return socket.emit(socketEvents.ERROR, errPayload);
+                }
+                const updatedMessage = await chatService.editMessage(conversationId, messageId, userId, content);
+                if (typeof callback === "function") {
+                    callback({ success: true, message: updatedMessage });
+                }
+            } catch (err) {
+                console.error("Socket message:edit error:", err.message);
+                const errPayload = { success: false, message: err.message || "Failed to edit message" };
+                if (typeof callback === "function") callback(errPayload);
+                socket.emit(socketEvents.ERROR, errPayload);
+            }
+        });
+
+        // ── 5. Delete Message ───────────────────────────────────────────────
+        socket.on(socketEvents.MESSAGE_DELETE, async (data, callback) => {
+            try {
+                const { conversationId, messageId } = data || {};
+                if (!conversationId || !messageId) {
+                    const errPayload = { success: false, message: "Missing conversationId or messageId" };
+                    if (typeof callback === "function") callback(errPayload);
+                    return socket.emit(socketEvents.ERROR, errPayload);
+                }
+                const result = await chatService.deleteMessage(conversationId, messageId, userId);
+                if (typeof callback === "function") {
+                    callback({ success: true, ...result });
+                }
+            } catch (err) {
+                console.error("Socket message:delete error:", err.message);
+                const errPayload = { success: false, message: err.message || "Failed to delete message" };
+                if (typeof callback === "function") callback(errPayload);
+                socket.emit(socketEvents.ERROR, errPayload);
+            }
+        });
+
+        // ── 6. Add Reaction ─────────────────────────────────────────────────
+        socket.on(socketEvents.REACTION_ADD, async (data, callback) => {
+            try {
+                const { conversationId, messageId, emoji } = data || {};
+                if (!conversationId || !messageId || !emoji) {
+                    const errPayload = { success: false, message: "Missing conversationId, messageId, or emoji" };
+                    if (typeof callback === "function") callback(errPayload);
+                    return socket.emit(socketEvents.ERROR, errPayload);
+                }
+                const reactions = await chatService.addReaction(conversationId, messageId, userId, emoji);
+                if (typeof callback === "function") {
+                    callback({ success: true, reactions });
+                }
+            } catch (err) {
+                console.error("Socket reaction:add error:", err.message);
+                const errPayload = { success: false, message: err.message || "Failed to add reaction" };
+                if (typeof callback === "function") callback(errPayload);
+                socket.emit(socketEvents.ERROR, errPayload);
+            }
+        });
+
+        // ── 7. Remove Reaction ──────────────────────────────────────────────
+        socket.on(socketEvents.REACTION_REMOVE, async (data, callback) => {
+            try {
+                const { conversationId, messageId } = data || {};
+                if (!conversationId || !messageId) {
+                    const errPayload = { success: false, message: "Missing conversationId or messageId" };
+                    if (typeof callback === "function") callback(errPayload);
+                    return socket.emit(socketEvents.ERROR, errPayload);
+                }
+                const reactions = await chatService.removeReaction(conversationId, messageId, userId);
+                if (typeof callback === "function") {
+                    callback({ success: true, reactions });
+                }
+            } catch (err) {
+                console.error("Socket reaction:remove error:", err.message);
+                const errPayload = { success: false, message: err.message || "Failed to remove reaction" };
+                if (typeof callback === "function") callback(errPayload);
+                socket.emit(socketEvents.ERROR, errPayload);
+            }
+        });
+
+        // ── 8. Typing Indicators ────────────────────────────────────────────
+        socket.on(socketEvents.TYPING_START, (data) => {
+            try {
+                const conversationId = data?.conversationId;
+                if (conversationId && mongoose.Types.ObjectId.isValid(conversationId)) {
+                    const roomName = `conversation:${conversationId}`;
+                    socket.to(roomName).emit(socketEvents.TYPING_START, {
+                        conversationId,
+                        userId,
+                        userName,
+                    });
+                }
+            } catch (err) {
+                console.error("Socket typing:start error:", err.message);
+            }
+        });
+
+        socket.on(socketEvents.TYPING_STOP, (data) => {
+            try {
+                const conversationId = data?.conversationId;
+                if (conversationId && mongoose.Types.ObjectId.isValid(conversationId)) {
+                    const roomName = `conversation:${conversationId}`;
+                    socket.to(roomName).emit(socketEvents.TYPING_STOP, {
+                        conversationId,
+                        userId,
+                        userName,
+                    });
+                }
+            } catch (err) {
+                console.error("Socket typing:stop error:", err.message);
+            }
+        });
+
+        // ── 9. Conversation Read ────────────────────────────────────────────
+        socket.on(socketEvents.CONVERSATION_READ, async (data, callback) => {
+            try {
+                const conversationId = data?.conversationId;
+                if (!conversationId || !mongoose.Types.ObjectId.isValid(conversationId)) {
+                    const errPayload = { success: false, message: "Invalid conversation ID" };
+                    if (typeof callback === "function") callback(errPayload);
+                    return;
+                }
+                const result = await chatService.markConversationRead(conversationId, userId);
+                if (typeof callback === "function") {
+                    callback(result);
+                }
+            } catch (err) {
+                console.error("Socket conversation:read error:", err.message);
+                if (typeof callback === "function") {
+                    callback({ success: false, message: err.message });
+                }
             }
         });
 
