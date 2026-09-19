@@ -58,6 +58,15 @@ const createNotification = async ({
         isRead: false,
     });
 
+    // Real-time Socket.IO emission to user-specific room
+    try {
+        const socketService = require("./socketService");
+        const io = socketService.getIO();
+        if (io) {
+            io.to(`user:${recipientId.toString()}`).emit("notification:new", notification);
+        }
+    } catch {}
+
     return notification;
 };
 
@@ -558,6 +567,192 @@ const checkDeadlinesAndOverdue = async (userId) => {
     return { createdCount: created.length, checkedTasks: tasks.length, checkedGoals: goals.length };
 };
 
+/**
+ * Chat Message & Mention Notifications — Phase 20
+ * Dispatches notifications for direct messages, project messages, mentions, replies, and attachments.
+ * Enforces active conversation suppression, sender exclusion, deterministic deduplication, and safe previews.
+ */
+const notifyChatMessage = async ({
+    message,
+    conversation,
+    sender,
+    content = "",
+    options = {},
+}) => {
+    try {
+        const senderId = (sender._id || sender).toString();
+        const conversationId = (conversation._id || conversation).toString();
+        const messageId = (message._id || message).toString();
+        const messageType = message.messageType || "TEXT";
+
+        // Get sender name
+        let senderName = sender.name;
+        if (!senderName) {
+            const senderUser = await User.findById(senderId).select("name").lean();
+            senderName = senderUser ? senderUser.name : "Someone";
+        }
+
+        // Determine authorized recipients
+        let recipientIds = [];
+        let projectName = "";
+        const projectId = conversation.project?._id || conversation.project;
+
+        if (conversation.type === "PROJECT" && projectId) {
+            const memberships = await ProjectMembership.find({ project: projectId }).select("user");
+            recipientIds = memberships.map((m) => m.user.toString());
+
+            const Project = require("../models/Project");
+            const project = await Project.findById(projectId).select("name").lean();
+            projectName = project ? project.name : (conversation.project?.name || "Project");
+        } else {
+            recipientIds = (conversation.participants || []).map((p) => (p._id || p).toString());
+        }
+
+        // 1. Exclude sender
+        recipientIds = recipientIds.filter((id) => id !== senderId);
+
+        // 2. Active conversation suppression: exclude users currently in the conversation room
+        let activeUserIds = options.activeUserIds || options.skipNotificationUserIds;
+        if (!activeUserIds) {
+            try {
+                const socketService = require("./socketService");
+                const io = socketService.getIO();
+                if (io) {
+                    const roomSockets = await io.in(`conversation:${conversationId}`).fetchSockets();
+                    activeUserIds = roomSockets.map((s) => s.userId).filter(Boolean);
+                }
+            } catch {}
+        }
+
+        if (activeUserIds && Array.isArray(activeUserIds)) {
+            const activeSet = new Set(activeUserIds.map((id) => id.toString()));
+            recipientIds = recipientIds.filter((id) => !activeSet.has(id));
+        }
+
+        if (recipientIds.length === 0) {
+            return [];
+        }
+
+        // 3. Mentions detection in content
+        const mentionedRecipientIds = new Set();
+        if (content && typeof content === "string") {
+            const mentionRegex = /@([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}|[a-zA-Z0-9._-]+)/g;
+            const matches = [...content.matchAll(mentionRegex)].map((m) => m[1].toLowerCase());
+
+            if (matches.length > 0) {
+                const recipientUsers = await User.find({ _id: { $in: recipientIds } })
+                    .select("_id name email")
+                    .lean();
+
+                for (const user of recipientUsers) {
+                    const nameTokens = user.name.toLowerCase().split(/\s+/);
+                    const fullNameClean = user.name.replace(/\s+/g, "").toLowerCase();
+                    const emailLower = user.email.toLowerCase();
+
+                    for (const match of matches) {
+                        if (
+                            match === fullNameClean ||
+                            match === emailLower ||
+                            nameTokens.includes(match) ||
+                            emailLower.startsWith(match)
+                        ) {
+                            mentionedRecipientIds.add(user._id.toString());
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. Safe preview copy
+        let previewText = "";
+        if (content && typeof content === "string" && content.trim().length > 0) {
+            const truncated = content.length > 80 ? `${content.substring(0, 80)}...` : content;
+            previewText = `"${truncated}"`;
+        } else if (messageType === "IMAGE") {
+            previewText = "sent a photo";
+        } else if (messageType === "VIDEO") {
+            previewText = "sent a video";
+        } else if (messageType === "AUDIO") {
+            previewText = "sent an audio file";
+        } else if (messageType === "FILE") {
+            previewText = `sent a file: ${message.attachment?.originalName || "attachment"}`;
+        } else {
+            previewText = "sent a message";
+        }
+
+        // 5. Reply detection
+        let repliedRecipientId = null;
+        if (options.replyTo || message.replyTo) {
+            const replyTarget = options.replyTo || message.replyTo;
+            const targetSenderId = replyTarget.sender?._id || replyTarget.sender;
+            if (targetSenderId && targetSenderId.toString() !== senderId && recipientIds.includes(targetSenderId.toString())) {
+                repliedRecipientId = targetSenderId.toString();
+            }
+        }
+
+        // 6. Build notifications with deterministic eventKey
+        const notifications = [];
+        for (const recipientId of recipientIds) {
+            const isMentioned = mentionedRecipientIds.has(recipientId);
+            const isReplied = recipientId === repliedRecipientId;
+
+            let type = NOTIFICATION_TYPES.CHAT_MESSAGE;
+            let title = "";
+            let notifMessage = "";
+            let eventKey = "";
+
+            if (isMentioned) {
+                type = NOTIFICATION_TYPES.CHAT_MENTION;
+                title = conversation.type === "PROJECT"
+                    ? `Mentioned in ${projectName}`
+                    : `${senderName} mentioned you`;
+                notifMessage = conversation.type === "PROJECT"
+                    ? `${senderName} mentioned you in ${projectName}: ${previewText}`
+                    : `${senderName} mentioned you: ${previewText}`;
+                eventKey = `CHAT_MENTION:${messageId}:${recipientId}`;
+            } else if (isReplied) {
+                title = `${senderName} replied to your message`;
+                notifMessage = conversation.type === "PROJECT"
+                    ? `${senderName} replied in ${projectName}: ${previewText}`
+                    : `${senderName}: ${previewText}`;
+                eventKey = `CHAT_REPLY:${messageId}:${recipientId}`;
+            } else {
+                title = conversation.type === "PROJECT"
+                    ? `New message in ${projectName}`
+                    : `New message from ${senderName}`;
+                notifMessage = conversation.type === "PROJECT"
+                    ? `${senderName}: ${previewText}`
+                    : `${senderName}: ${previewText}`;
+                eventKey = `CHAT_MESSAGE:${messageId}:${recipientId}`;
+            }
+
+            notifications.push({
+                recipient: recipientId,
+                type,
+                title,
+                message: notifMessage,
+                sourceType: SOURCE_TYPES.CONVERSATION,
+                sourceId: conversationId,
+                project: projectId || null,
+                eventKey,
+                metadata: {
+                    conversationId,
+                    messageId,
+                    senderId,
+                    senderName,
+                    messageType,
+                },
+            });
+        }
+
+        return await createNotifications(notifications);
+    } catch (err) {
+        console.error("notifyChatMessage error:", err.message);
+        return [];
+    }
+};
+
 module.exports = {
     createNotification,
     createNotifications,
@@ -573,4 +768,5 @@ module.exports = {
     notifyCommentAndMentions,
     notifyGoalProgress,
     checkDeadlinesAndOverdue,
+    notifyChatMessage,
 };

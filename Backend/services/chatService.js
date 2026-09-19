@@ -570,66 +570,18 @@ const sendMessage = async (conversationId, userId, content, options = {}) => {
     const result = await formatMessage(populatedMessage);
 
     // ── Notification Integration ──────────────────────────────────────────
-    try {
-        const senderUser = await User.findById(userObjectId).select("name").lean();
-        const senderName = senderUser ? senderUser.name : "Someone";
-
-        let notifTitle = "New Message";
-        let notifMessage = `${senderName} sent a message.`;
-
-        if (conversation.type === "PROJECT" && conversation.project) {
-            const Project = require("../models/Project");
-            const project = await Project.findById(conversation.project).select("name").lean();
-            if (project) {
-                notifTitle = `New Message in ${project.name}`;
-                notifMessage = `${senderName}: "${trimmedContent.substring(0, 80)}${trimmedContent.length > 80 ? "..." : ""}"`;
-            }
-        } else if (conversation.type === "DIRECT") {
-            notifTitle = `New Message from ${senderName}`;
-            notifMessage = `${trimmedContent.substring(0, 80)}${trimmedContent.length > 80 ? "..." : ""}`;
-        }
-
-        let recipientIds;
-        if (conversation.type === "PROJECT") {
-            const memberships = await ProjectMembership.find({ project: conversation.project }).select("user");
-            recipientIds = memberships
-                .map((m) => m.user.toString())
-                .filter((id) => id !== userObjectId.toString());
-        } else {
-            recipientIds = conversation.participants
-                .map((p) => p.toString())
-                .filter((id) => id !== userObjectId.toString());
-        }
-
-        if (options.skipNotificationUserIds && Array.isArray(options.skipNotificationUserIds)) {
-            const skipSet = new Set(options.skipNotificationUserIds.map((id) => id.toString()));
-            recipientIds = recipientIds.filter((id) => !skipSet.has(id));
-        }
-
-        if (recipientIds.length > 0) {
-            const notificationItems = recipientIds.map((recipientId) => ({
-                recipient: recipientId,
-                type: NOTIFICATION_TYPES.CHAT_MESSAGE,
-                title: notifTitle,
-                message: notifMessage,
-                sourceType: SOURCE_TYPES.CONVERSATION,
-                sourceId: conversationId,
-                project: conversation.project || null,
-                metadata: {
-                    conversationId,
-                    messageId: message._id,
-                    senderId: userObjectId,
-                    senderName,
-                },
-            }));
-
-            notificationService.createNotifications(notificationItems).catch((err) => {
-                console.error("Chat notification creation failed:", err.message);
-            });
-        }
-    } catch (notifErr) {
+    notificationService.notifyChatMessage({
+        message,
+        conversation,
+        sender: userObjectId,
+        content: trimmedContent,
+        options: {
+            ...options,
+            replyTo: result.replyTo,
+        },
+    }).catch((notifErr) => {
         console.error("Chat notification error:", notifErr.message);
-    }
+    });
 
     // If requested or sent via HTTP API, emit socket events
     if (options.emitSocket) {
@@ -807,75 +759,19 @@ const sendAttachmentMessage = async (conversationId, userId, file, content = "",
 
     const result = await formatMessage(populatedMessage);
 
-    // Send notifications to other participants
-    try {
-        const senderUser = await User.findById(userObjectId).select("name").lean();
-        const senderName = senderUser ? senderUser.name : "Someone";
-
-        let notifTitle = "New Attachment";
-        let previewText = trimmedContent
-            ? `"${trimmedContent.substring(0, 60)}${trimmedContent.length > 60 ? "..." : ""}"`
-            : messageType === "IMAGE"
-            ? "sent a photo"
-            : messageType === "VIDEO"
-            ? "sent a video"
-            : messageType === "AUDIO"
-            ? "sent an audio file"
-            : `sent a file: ${file.originalname}`;
-
-        if (conversation.type === "PROJECT" && conversation.project) {
-            const Project = require("../models/Project");
-            const project = await Project.findById(conversation.project).select("name").lean();
-            if (project) {
-                notifTitle = `New Attachment in ${project.name}`;
-            }
-        } else if (conversation.type === "DIRECT") {
-            notifTitle = `New Message from ${senderName}`;
-        }
-
-        let notifMessage = `${senderName} ${previewText}`;
-
-        let recipientIds;
-        if (conversation.type === "PROJECT") {
-            const memberships = await ProjectMembership.find({ project: conversation.project }).select("user");
-            recipientIds = memberships
-                .map((m) => m.user.toString())
-                .filter((id) => id !== userObjectId.toString());
-        } else {
-            recipientIds = conversation.participants
-                .map((p) => p.toString())
-                .filter((id) => id !== userObjectId.toString());
-        }
-
-        if (options.skipNotificationUserIds && Array.isArray(options.skipNotificationUserIds)) {
-            const skipSet = new Set(options.skipNotificationUserIds.map((id) => id.toString()));
-            recipientIds = recipientIds.filter((id) => !skipSet.has(id));
-        }
-
-        if (recipientIds.length > 0) {
-            const notificationItems = recipientIds.map((recipientId) => ({
-                recipient: recipientId,
-                type: NOTIFICATION_TYPES.CHAT_MESSAGE,
-                title: notifTitle,
-                message: notifMessage,
-                sourceType: SOURCE_TYPES.CONVERSATION,
-                sourceId: conversationId,
-                project: conversation.project || null,
-                metadata: {
-                    conversationId,
-                    messageId: message._id,
-                    senderId: userObjectId,
-                    senderName,
-                },
-            }));
-
-            notificationService.createNotifications(notificationItems).catch((err) => {
-                console.error("Chat attachment notification creation failed:", err.message);
-            });
-        }
-    } catch (notifErr) {
+    // ── Notification Integration ──────────────────────────────────────────
+    notificationService.notifyChatMessage({
+        message,
+        conversation,
+        sender: userObjectId,
+        content: trimmedContent,
+        options: {
+            ...options,
+            replyTo: result.replyTo,
+        },
+    }).catch((notifErr) => {
         console.error("Chat attachment notification error:", notifErr.message);
-    }
+    });
 
     // Real-time Socket.IO emission
     try {
