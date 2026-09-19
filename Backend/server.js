@@ -1,8 +1,10 @@
 require("dotenv").config();
+const http = require("http");
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const connectDB = require("./config/db");
+const socketService = require("./services/socketService");
 
 const authRoutes = require("./routes/authRoutes");
 const projectRoutes = require("./routes/projectRoutes");
@@ -95,8 +97,12 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Start Server
+// Create HTTP Server & Initialize Socket.IO
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+const server = http.createServer(app);
+socketService.init(server, allowedOrigins);
+
+// Start Server
+server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT} [${process.env.NODE_ENV || "development"}]`);
 });

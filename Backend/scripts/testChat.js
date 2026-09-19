@@ -120,17 +120,17 @@ const testConversationsAndMessages = async () => {
     const testId = crypto.randomBytes(4).toString("hex");
     const userA = await User.create({
         name: `TestUser_A_${testId}`,
-        email: `test_a_${testId}@studysync.test`,
+        email: `test_a_${testId}@studysync.com`,
         password: "TestPassword123!",
     });
     const userB = await User.create({
         name: `TestUser_B_${testId}`,
-        email: `test_b_${testId}@studysync.test`,
+        email: `test_b_${testId}@studysync.com`,
         password: "TestPassword123!",
     });
     const userC = await User.create({
         name: `TestUser_C_${testId}`,
-        email: `test_c_${testId}@studysync.test`,
+        email: `test_c_${testId}@studysync.com`,
         password: "TestPassword123!",
     });
     assert(userA && userB && userC, "Test users created");

@@ -317,7 +317,7 @@ const getMessages = async (conversationId, userId, options = {}) => {
  * Send a message in a conversation.
  * Encrypts content before storing, updates conversation's lastMessage.
  */
-const sendMessage = async (conversationId, userId, content) => {
+const sendMessage = async (conversationId, userId, content, options = {}) => {
     const userObjectId = new mongoose.Types.ObjectId(userId);
 
     if (!mongoose.Types.ObjectId.isValid(conversationId)) {
@@ -424,27 +424,35 @@ const sendMessage = async (conversationId, userId, content) => {
                 .filter((id) => id !== userObjectId.toString());
         }
 
-        // Create notifications (non-blocking — don't fail the message send on notification errors)
-        const notificationItems = recipientIds.map((recipientId) => ({
-            recipient: recipientId,
-            type: NOTIFICATION_TYPES.CHAT_MESSAGE,
-            title: notifTitle,
-            message: notifMessage,
-            sourceType: SOURCE_TYPES.CONVERSATION,
-            sourceId: conversationId,
-            project: conversation.project || null,
-            metadata: {
-                conversationId,
-                messageId: message._id,
-                senderId: userObjectId,
-                senderName,
-            },
-        }));
+        // Phase 16: Exclude recipients currently active in the conversation room
+        if (options.skipNotificationUserIds && Array.isArray(options.skipNotificationUserIds)) {
+            const skipSet = new Set(options.skipNotificationUserIds.map((id) => id.toString()));
+            recipientIds = recipientIds.filter((id) => !skipSet.has(id));
+        }
 
-        // Fire and don't await — notifications should not block message sending
-        notificationService.createNotifications(notificationItems).catch((err) => {
-            console.error("Chat notification creation failed:", err.message);
-        });
+        if (recipientIds.length > 0) {
+            // Create notifications (non-blocking — don't fail the message send on notification errors)
+            const notificationItems = recipientIds.map((recipientId) => ({
+                recipient: recipientId,
+                type: NOTIFICATION_TYPES.CHAT_MESSAGE,
+                title: notifTitle,
+                message: notifMessage,
+                sourceType: SOURCE_TYPES.CONVERSATION,
+                sourceId: conversationId,
+                project: conversation.project || null,
+                metadata: {
+                    conversationId,
+                    messageId: message._id,
+                    senderId: userObjectId,
+                    senderName,
+                },
+            }));
+
+            // Fire and don't await — notifications should not block message sending
+            notificationService.createNotifications(notificationItems).catch((err) => {
+                console.error("Chat notification creation failed:", err.message);
+            });
+        }
     } catch (notifErr) {
         // Never fail message sending due to notification issues
         console.error("Chat notification error:", notifErr.message);
@@ -497,4 +505,5 @@ module.exports = {
     getConversationById,
     getMessages,
     sendMessage,
+    verifyConversationAccess,
 };
