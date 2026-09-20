@@ -13,6 +13,15 @@ const rateLimitMap = new Map();
 const RATE_LIMIT_WINDOW_MS = 2000; // 2 seconds
 const MAX_MESSAGES_PER_WINDOW = 5;
 
+// Phase 21: Typing throttle map — userId:conversationId -> lastTimestamp
+const typingThrottleMap = new Map();
+const TYPING_THROTTLE_MS = 2000; // Max 1 typing event per 2 seconds per conversation
+
+// Phase 21: Generic socket event rate limiter for non-message events
+const eventRateLimitMap = new Map();
+const EVENT_RATE_LIMIT_WINDOW_MS = 5000; // 5 seconds
+const MAX_EVENTS_PER_WINDOW = 15; // 15 events per 5 seconds
+
 /**
  * Check if a user is exceeding message rate limits.
  */
@@ -33,16 +42,72 @@ const isRateLimited = (userId) => {
 };
 
 /**
+ * Phase 21: Check if a typing event should be throttled.
+ */
+const isTypingThrottled = (userId, conversationId) => {
+    const key = `${userId}:${conversationId}`;
+    const now = Date.now();
+    const lastTime = typingThrottleMap.get(key) || 0;
+
+    if (now - lastTime < TYPING_THROTTLE_MS) {
+        return true;
+    }
+
+    typingThrottleMap.set(key, now);
+    return false;
+};
+
+/**
+ * Phase 21: Generic event rate limiter for socket operations.
+ */
+const isEventRateLimited = (userId) => {
+    const now = Date.now();
+    const timestamps = eventRateLimitMap.get(userId) || [];
+    const validTimestamps = timestamps.filter((t) => now - t < EVENT_RATE_LIMIT_WINDOW_MS);
+
+    if (validTimestamps.length >= MAX_EVENTS_PER_WINDOW) {
+        return true;
+    }
+
+    validTimestamps.push(now);
+    eventRateLimitMap.set(userId, validTimestamps);
+    return false;
+};
+
+/**
+ * Phase 21: Check if a socket has joined a specific conversation room.
+ */
+const isInRoom = (socket, conversationId) => {
+    const roomName = `conversation:${conversationId}`;
+    return socket.rooms.has(roomName);
+};
+
+/**
  * Clean up rate limit map entries periodically
  */
 setInterval(() => {
     const now = Date.now();
-    for (const [userId, timestamps] of rateLimitMap.entries()) {
+    for (const [key, timestamps] of rateLimitMap.entries()) {
         const valid = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
         if (valid.length === 0) {
-            rateLimitMap.delete(userId);
+            rateLimitMap.delete(key);
         } else {
-            rateLimitMap.set(userId, valid);
+            rateLimitMap.set(key, valid);
+        }
+    }
+    // Clean up typing throttle entries older than 30 seconds
+    for (const [key, lastTime] of typingThrottleMap.entries()) {
+        if (now - lastTime > 30000) {
+            typingThrottleMap.delete(key);
+        }
+    }
+    // Clean up event rate limit entries
+    for (const [key, timestamps] of eventRateLimitMap.entries()) {
+        const valid = timestamps.filter((t) => now - t < EVENT_RATE_LIMIT_WINDOW_MS);
+        if (valid.length === 0) {
+            eventRateLimitMap.delete(key);
+        } else {
+            eventRateLimitMap.set(key, valid);
         }
     }
 }, 30000);
@@ -277,6 +342,14 @@ const init = (server, allowedOrigins = []) => {
                     if (typeof callback === "function") callback(errPayload);
                     return socket.emit(socketEvents.ERROR, errPayload);
                 }
+
+                // Phase 21: Rate limit edit events
+                if (isEventRateLimited(userId)) {
+                    const errPayload = { success: false, message: "Too many requests. Please slow down." };
+                    if (typeof callback === "function") callback(errPayload);
+                    return socket.emit(socketEvents.ERROR, errPayload);
+                }
+
                 const updatedMessage = await chatService.editMessage(conversationId, messageId, userId, content);
                 if (typeof callback === "function") {
                     callback({ success: true, message: updatedMessage });
@@ -298,6 +371,14 @@ const init = (server, allowedOrigins = []) => {
                     if (typeof callback === "function") callback(errPayload);
                     return socket.emit(socketEvents.ERROR, errPayload);
                 }
+
+                // Phase 21: Rate limit delete events
+                if (isEventRateLimited(userId)) {
+                    const errPayload = { success: false, message: "Too many requests. Please slow down." };
+                    if (typeof callback === "function") callback(errPayload);
+                    return socket.emit(socketEvents.ERROR, errPayload);
+                }
+
                 const result = await chatService.deleteMessage(conversationId, messageId, userId);
                 if (typeof callback === "function") {
                     callback({ success: true, ...result });
@@ -319,6 +400,14 @@ const init = (server, allowedOrigins = []) => {
                     if (typeof callback === "function") callback(errPayload);
                     return socket.emit(socketEvents.ERROR, errPayload);
                 }
+
+                // Phase 21: Rate limit reaction events
+                if (isEventRateLimited(userId)) {
+                    const errPayload = { success: false, message: "Too many reactions. Please slow down." };
+                    if (typeof callback === "function") callback(errPayload);
+                    return socket.emit(socketEvents.ERROR, errPayload);
+                }
+
                 const reactions = await chatService.addReaction(conversationId, messageId, userId, emoji);
                 if (typeof callback === "function") {
                     callback({ success: true, reactions });
@@ -340,6 +429,14 @@ const init = (server, allowedOrigins = []) => {
                     if (typeof callback === "function") callback(errPayload);
                     return socket.emit(socketEvents.ERROR, errPayload);
                 }
+
+                // Phase 21: Rate limit reaction events
+                if (isEventRateLimited(userId)) {
+                    const errPayload = { success: false, message: "Too many reactions. Please slow down." };
+                    if (typeof callback === "function") callback(errPayload);
+                    return socket.emit(socketEvents.ERROR, errPayload);
+                }
+
                 const reactions = await chatService.removeReaction(conversationId, messageId, userId);
                 if (typeof callback === "function") {
                     callback({ success: true, reactions });
@@ -352,18 +449,24 @@ const init = (server, allowedOrigins = []) => {
             }
         });
 
-        // ── 8. Typing Indicators ────────────────────────────────────────────
+        // ── 8. Typing Indicators — Phase 21: throttled + room-verified ──────
         socket.on(socketEvents.TYPING_START, (data) => {
             try {
                 const conversationId = data?.conversationId;
-                if (conversationId && mongoose.Types.ObjectId.isValid(conversationId)) {
-                    const roomName = `conversation:${conversationId}`;
-                    socket.to(roomName).emit(socketEvents.TYPING_START, {
-                        conversationId,
-                        userId,
-                        userName,
-                    });
-                }
+                if (!conversationId || !mongoose.Types.ObjectId.isValid(conversationId)) return;
+
+                // Phase 21: Only allow typing to rooms the socket has joined
+                if (!isInRoom(socket, conversationId)) return;
+
+                // Phase 21: Throttle typing events (max 1 per 2s per user+conversation)
+                if (isTypingThrottled(userId, conversationId)) return;
+
+                const roomName = `conversation:${conversationId}`;
+                socket.to(roomName).emit(socketEvents.TYPING_START, {
+                    conversationId,
+                    userId,
+                    userName,
+                });
             } catch (err) {
                 console.error("Socket typing:start error:", err.message);
             }
@@ -372,14 +475,17 @@ const init = (server, allowedOrigins = []) => {
         socket.on(socketEvents.TYPING_STOP, (data) => {
             try {
                 const conversationId = data?.conversationId;
-                if (conversationId && mongoose.Types.ObjectId.isValid(conversationId)) {
-                    const roomName = `conversation:${conversationId}`;
-                    socket.to(roomName).emit(socketEvents.TYPING_STOP, {
-                        conversationId,
-                        userId,
-                        userName,
-                    });
-                }
+                if (!conversationId || !mongoose.Types.ObjectId.isValid(conversationId)) return;
+
+                // Phase 21: Only allow typing to rooms the socket has joined
+                if (!isInRoom(socket, conversationId)) return;
+
+                const roomName = `conversation:${conversationId}`;
+                socket.to(roomName).emit(socketEvents.TYPING_STOP, {
+                    conversationId,
+                    userId,
+                    userName,
+                });
             } catch (err) {
                 console.error("Socket typing:stop error:", err.message);
             }
@@ -394,6 +500,15 @@ const init = (server, allowedOrigins = []) => {
                     if (typeof callback === "function") callback(errPayload);
                     return;
                 }
+
+                // Phase 21: Rate limit read events
+                if (isEventRateLimited(userId)) {
+                    if (typeof callback === "function") {
+                        callback({ success: false, message: "Too many requests. Please slow down." });
+                    }
+                    return;
+                }
+
                 const result = await chatService.markConversationRead(conversationId, userId);
                 if (typeof callback === "function") {
                     callback(result);

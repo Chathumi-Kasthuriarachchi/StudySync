@@ -847,6 +847,14 @@ const editMessage = async (conversationId, messageId, userId, newContent) => {
         throw error;
     }
 
+    // Phase 21: Only TEXT messages can be edited
+    // Attachment messages (IMAGE, FILE, VIDEO, AUDIO) without text captions cannot be edited
+    if (message.messageType !== "TEXT" && !message.encryptedContent) {
+        const error = new Error("Only text messages or captions can be edited");
+        error.statusCode = 400;
+        throw error;
+    }
+
     // Encrypt updated content
     try {
         message.encryptedContent = encrypt(trimmedContent);

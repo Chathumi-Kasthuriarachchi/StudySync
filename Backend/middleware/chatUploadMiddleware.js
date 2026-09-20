@@ -66,10 +66,44 @@ const ALLOWED_MIME_TYPES = {
     "audio/x-m4a": { category: "AUDIO", messageType: "AUDIO", label: "M4A Audio" },
 };
 
+// Phase 21: Map of expected file extensions per MIME type for cross-validation
+const MIME_EXTENSION_MAP = {
+    "image/jpeg": ["jpg", "jpeg"],
+    "image/jpg": ["jpg", "jpeg"],
+    "image/png": ["png"],
+    "image/webp": ["webp"],
+    "image/gif": ["gif"],
+    "application/pdf": ["pdf"],
+    "application/msword": ["doc"],
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ["docx"],
+    "application/vnd.ms-excel": ["xls"],
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ["xlsx"],
+    "application/vnd.ms-powerpoint": ["ppt"],
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": ["pptx"],
+    "text/plain": ["txt", "text", "log", "md"],
+    "text/csv": ["csv"],
+    "application/zip": ["zip"],
+    "application/x-zip-compressed": ["zip"],
+    "application/x-zip": ["zip"],
+    "video/mp4": ["mp4"],
+    "video/webm": ["webm"],
+    "video/quicktime": ["mov"],
+    "audio/mpeg": ["mp3", "mpeg"],
+    "audio/mp3": ["mp3"],
+    "audio/wav": ["wav"],
+    "audio/webm": ["webm"],
+    "audio/ogg": ["ogg"],
+    "audio/x-m4a": ["m4a"],
+};
+
 // Multer memory storage
 const storage = multer.memoryStorage();
 
-// File filter validates MIME type
+// Phase 21: Configurable overall file size limit via environment variable
+const MAX_OVERALL_FILE_SIZE =
+    (parseInt(process.env.CHAT_MAX_FILE_SIZE, 10) || 100) * 1024 * 1024;
+
+// File filter validates MIME type and cross-checks extension
 const fileFilter = (req, file, cb) => {
     const mimeInfo = ALLOWED_MIME_TYPES[file.mimetype];
     if (!mimeInfo) {
@@ -80,14 +114,29 @@ const fileFilter = (req, file, cb) => {
             false
         );
     }
+
+    // Phase 21: Cross-validate extension against claimed MIME type
+    if (file.originalname) {
+        const ext = file.originalname.split(".").pop()?.toLowerCase() || "";
+        const allowedExtensions = MIME_EXTENSION_MAP[file.mimetype];
+        if (allowedExtensions && ext && !allowedExtensions.includes(ext)) {
+            return cb(
+                new Error(
+                    `File extension (.${ext}) does not match the declared type (${file.mimetype}). Potential file type mismatch.`
+                ),
+                false
+            );
+        }
+    }
+
     cb(null, true);
 };
 
-// Maximum overall file size for multer: 100MB
+// Maximum overall file size for multer
 const upload = multer({
     storage,
     limits: {
-        fileSize: 100 * 1024 * 1024,
+        fileSize: MAX_OVERALL_FILE_SIZE,
     },
     fileFilter,
 });

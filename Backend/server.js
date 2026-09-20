@@ -5,6 +5,7 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const connectDB = require("./config/db");
 const socketService = require("./services/socketService");
+const { securityHeaders } = require("./middleware/securityMiddleware");
 
 const authRoutes = require("./routes/authRoutes");
 const projectRoutes = require("./routes/projectRoutes");
@@ -24,16 +25,22 @@ const app = express();
 // Connect to Database
 connectDB();
 
+// Phase 21: Security headers (Helmet) — applied before all other middleware
+app.use(securityHeaders);
+
 // CORS Middleware Configuration
 // credentials: true is required for HttpOnly cookies to be sent cross-origin
-const allowedOrigins = [
-    process.env.CLIENT_URL,
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "http://localhost:5174",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:5174",
-].filter(Boolean);
+const isProduction = process.env.NODE_ENV === "production";
+const allowedOrigins = isProduction
+    ? [process.env.CLIENT_URL].filter(Boolean)
+    : [
+          process.env.CLIENT_URL,
+          "http://localhost:5173",
+          "http://localhost:3000",
+          "http://localhost:5174",
+          "http://127.0.0.1:5173",
+          "http://127.0.0.1:5174",
+      ].filter(Boolean);
 
 app.use(
     cors({
@@ -49,8 +56,8 @@ app.use(
     })
 );
 
-// Body parser middleware
-app.use(express.json());
+// Body parser middleware — Phase 21: limit payload size to prevent abuse
+app.use(express.json({ limit: "1mb" }));
 
 // Cookie parser — required to read HttpOnly refresh token cookies
 app.use(cookieParser());
@@ -88,12 +95,22 @@ app.use((req, res) => {
     res.status(404).json({ success: false, message: "Route not found" });
 });
 
-// Global Error Handling Middleware
+// Global Error Handling Middleware — Phase 21: sanitized for production
 app.use((err, req, res, next) => {
-    console.error("Global Server Error:", err.stack);
-    res.status(500).json({
+    // Log full error server-side for debugging
+    if (process.env.NODE_ENV !== "production") {
+        console.error("Global Server Error:", err.stack);
+    } else {
+        console.error("Global Server Error:", err.message);
+    }
+
+    // Never expose stack traces or internal details to clients in production
+    const statusCode = err.status || err.statusCode || 500;
+    res.status(statusCode).json({
         success: false,
-        message: err.message || "Internal Server Error",
+        message: process.env.NODE_ENV === "production"
+            ? "Internal Server Error"
+            : err.message || "Internal Server Error",
     });
 });
 

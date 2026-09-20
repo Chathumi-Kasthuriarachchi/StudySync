@@ -23,6 +23,12 @@ const SEPARATOR = ":";
 /**
  * Retrieve the encryption key from environment.
  * The key must be a 64-character hex string (32 bytes).
+ *
+ * Phase 21 Note — Key Rotation Limitation:
+ * This system does NOT support key rotation without re-encrypting all existing messages.
+ * Changing CHAT_ENCRYPTION_KEY will make previously encrypted messages undecryptable.
+ * If key rotation is needed, implement a versioned key migration before changing the key.
+ *
  * @returns {Buffer} 32-byte encryption key
  */
 const getEncryptionKey = () => {
@@ -35,6 +41,13 @@ const getEncryptionKey = () => {
     if (keyHex.length !== 64) {
         throw new Error(
             "CHAT_ENCRYPTION_KEY must be a 64-character hex string (32 bytes)"
+        );
+    }
+
+    // Phase 21: Validate key is valid hexadecimal
+    if (!/^[0-9a-fA-F]{64}$/.test(keyHex)) {
+        throw new Error(
+            "CHAT_ENCRYPTION_KEY contains invalid characters. Must be hexadecimal (0-9, a-f)."
         );
     }
 
