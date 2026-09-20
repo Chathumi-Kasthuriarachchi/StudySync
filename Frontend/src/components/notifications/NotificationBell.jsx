@@ -65,6 +65,16 @@ export const getNotificationVisuals = (type) => {
         icon: Target,
         iconBg: 'bg-cyan-100 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 border-cyan-200 dark:border-cyan-900/50',
       };
+    case 'CHAT_MESSAGE':
+      return {
+        icon: MessageSquare,
+        iconBg: 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50',
+      };
+    case 'CHAT_MENTION':
+      return {
+        icon: AtSign,
+        iconBg: 'bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-900/50',
+      };
     default:
       return {
         icon: Bell,
@@ -131,7 +141,11 @@ const NotificationBell = () => {
     setIsOpen(false);
 
     // Deep navigation based on sourceType and metadata
-    if (notif.sourceType === 'TASK') {
+    if (notif.sourceType === 'CONVERSATION') {
+      const convId = notif.metadata?.conversationId || notif.sourceId;
+      const messageId = notif.metadata?.messageId;
+      navigate(`/chat?conversation=${convId}${messageId ? `&message=${messageId}` : ''}`);
+    } else if (notif.sourceType === 'TASK') {
       if (notif.project) {
         navigate(`/projects/${notif.project._id || notif.project}`);
       } else {

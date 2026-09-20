@@ -17,6 +17,7 @@ import {
   ShieldAlert,
   Bell,
   FileText,
+  MessageSquare,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
@@ -185,6 +186,13 @@ const Sidebar = ({
               icon={Bell}
               label="Notifications"
               badge={unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : undefined}
+              isCollapsed={isCollapsed}
+              onClick={handleNavClick}
+            />
+            <NavItem
+              to="/chat"
+              icon={MessageSquare}
+              label="Chat"
               isCollapsed={isCollapsed}
               onClick={handleNavClick}
             />

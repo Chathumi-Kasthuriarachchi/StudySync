@@ -83,4 +83,96 @@ const refreshLimiter = createLimiter(
     "Too many refresh requests. Please try again shortly."
 );
 
-module.exports = { authLimiter, loginLimiter, otpLimiter, refreshLimiter };
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 21: Chat-specific rate limiters
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * chatMessageLimiter
+ *
+ * Used on: POST /api/chat/conversations/:id/messages
+ * Allows 30 messages per minute per IP.
+ * Prevents message flooding via REST (Socket.IO has its own rate limiter).
+ */
+const chatMessageLimiter = createLimiter(
+    60 * 1000,  // 1 minute window
+    30,
+    "You are sending messages too quickly. Please slow down."
+);
+
+/**
+ * chatConversationLimiter
+ *
+ * Used on: POST /api/chat/conversations/direct
+ * Allows 10 conversation creations per hour per IP.
+ * Prevents mass conversation creation abuse.
+ */
+const chatConversationLimiter = createLimiter(
+    60 * 60 * 1000,  // 1 hour window
+    10,
+    "Too many conversations created. Please try again later."
+);
+
+/**
+ * chatReactionLimiter
+ *
+ * Used on: POST/DELETE /api/chat/.../reactions
+ * Allows 30 reaction operations per minute per IP.
+ */
+const chatReactionLimiter = createLimiter(
+    60 * 1000,  // 1 minute window
+    30,
+    "Too many reaction requests. Please slow down."
+);
+
+/**
+ * chatSearchLimiter
+ *
+ * Used on: GET /api/chat/conversations/:id/search
+ * Allows 20 searches per minute per IP.
+ * Search is CPU-intensive (decrypts messages server-side).
+ */
+const chatSearchLimiter = createLimiter(
+    60 * 1000,  // 1 minute window
+    20,
+    "Too many search requests. Please wait a moment."
+);
+
+/**
+ * chatUploadLimiter
+ *
+ * Used on: POST /api/chat/conversations/:id/attachments
+ * Allows 10 uploads per 5 minutes per IP.
+ * Prevents storage abuse.
+ */
+const chatUploadLimiter = createLimiter(
+    5 * 60 * 1000,  // 5 minute window
+    10,
+    "Too many file uploads. Please wait before uploading more files."
+);
+
+/**
+ * chatGeneralLimiter
+ *
+ * Used on: read receipts, edit, delete, general chat operations
+ * Allows 60 requests per minute per IP.
+ */
+const chatGeneralLimiter = createLimiter(
+    60 * 1000,  // 1 minute window
+    60,
+    "Too many requests. Please slow down."
+);
+
+module.exports = {
+    authLimiter,
+    loginLimiter,
+    otpLimiter,
+    refreshLimiter,
+    chatMessageLimiter,
+    chatConversationLimiter,
+    chatReactionLimiter,
+    chatSearchLimiter,
+    chatUploadLimiter,
+    chatGeneralLimiter,
+};
+
