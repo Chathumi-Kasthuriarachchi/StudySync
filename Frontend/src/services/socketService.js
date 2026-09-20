@@ -96,6 +96,16 @@ class SocketService {
       this._setStatus('disconnected');
     });
 
+    // Phase 21: Handle server-side socket errors (auth failures, rate limits, etc.)
+    this.socket.on(SOCKET_EVENTS.ERROR, (error) => {
+      const message = error?.message || '';
+      // If authentication error, disconnect cleanly rather than retrying forever
+      if (message.toLowerCase().includes('authentication') || message.toLowerCase().includes('not authorized')) {
+        console.warn('Socket authentication error:', message);
+        this.disconnect();
+      }
+    });
+
     if (this.socket.io) {
       this.socket.io.on('reconnect_attempt', () => {
         this._setStatus('connecting');

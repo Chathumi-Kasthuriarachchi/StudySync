@@ -58,6 +58,17 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    // Phase 21: Handle 403 Forbidden — do not retry, just reject with a clean message
+    if (error.response?.status === 403) {
+      const message = error.response?.data?.message || 'Access denied';
+      return Promise.reject(error);
+    }
+
+    // Phase 21: Handle 429 Too Many Requests — do not retry
+    if (error.response?.status === 429) {
+      return Promise.reject(error);
+    }
+
     // Only attempt refresh on 401 that isn't already a retry and isn't from
     // the auth endpoints themselves (to prevent infinite loops)
     const isAuthEndpoint = originalRequest.url?.includes('/api/auth/login') ||
