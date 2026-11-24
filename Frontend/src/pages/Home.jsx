@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { DotPattern } from '../components/ui/dot-pattern';
-import { CheckSquare, Timer, BarChart3, ArrowRight } from 'lucide-react';
+import { CheckSquare, Timer, BarChart3 } from 'lucide-react';
 
 /**
  * Home Page
@@ -44,9 +44,7 @@ const Home = () => {
             </h1>
 
             <p className="text-base sm:text-lg text-slate-600 dark:text-slate-300 leading-relaxed mb-8">
-              A smart productivity and task management platform built on the MERN stack.
-              Secure JWT authentication with bcrypt hashing, system-level authorization
-              (<code>ADMIN</code> vs <code>USER</code>), and client session restoration.
+              A complete productivity platform to organize coursework, track study sessions, manage deadlines and collaborate with peers in one place.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -56,7 +54,6 @@ const Home = () => {
                   className="w-full sm:w-auto px-6 py-3 rounded-xl bg-powder-600 hover:bg-powder-700 text-white font-medium shadow-sm transition flex items-center justify-center gap-2"
                 >
                   <span>Go to Your Dashboard ({user?.name})</span>
-                  <ArrowRight className="w-4 h-4" />
                 </Link>
               ) : (
                 <>
@@ -65,7 +62,6 @@ const Home = () => {
                     className="w-full sm:w-auto px-6 py-3 rounded-xl bg-powder-600 hover:bg-powder-700 text-white font-medium shadow-sm transition flex items-center justify-center gap-2"
                   >
                     <span>Create an Account</span>
-                    <ArrowRight className="w-4 h-4" />
                   </Link>
 
                   <Link
@@ -91,7 +87,7 @@ const Home = () => {
             Designed for Focused Academic Work
           </h2>
           <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base mt-2">
-            Minimal, fast, and structured tools to keep your deadlines and focus sessions organized.
+            Clean, fast and structured tools to keep your deadlines and focus sessions organized.
           </p>
         </div>
 
@@ -102,7 +98,7 @@ const Home = () => {
             </div>
             <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Smart Task Management</h3>
             <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-              Organize assignments, prioritize deliverables with tags, and track progress with Kanban boards.
+              Organize assignments, prioritize deliverables with tags and track progress with Kanban boards.
             </p>
           </div>
 
@@ -112,7 +108,7 @@ const Home = () => {
             </div>
             <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Focus Mode &amp; Timer</h3>
             <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-              Distraction-free Pomodoro intervals tailored for deep study sessions and continuous flow.
+              Focused Pomodoro intervals tailored for deep study sessions and continuous flow.
             </p>
           </div>
 
@@ -122,7 +118,7 @@ const Home = () => {
             </div>
             <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Productivity Analytics</h3>
             <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-              Gain visibility into study hours, task completion velocity, and personal consistency trends.
+              Gain visibility into study hours, task completion velocity and personal consistency trends.
             </p>
           </div>
         </div>
@@ -138,7 +134,7 @@ const Home = () => {
             How This Works
           </h2>
           <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base mt-2">
-            A three-step rhythm designed to keep students on track without cognitive overload.
+            A simple rhythm designed to keep students on track without cognitive overload.
           </p>
         </div>
 
@@ -159,7 +155,7 @@ const Home = () => {
             </div>
             <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">Deep Work Sessions</h3>
             <p className="text-sm text-slate-600 dark:text-slate-400 max-w-xs">
-              Activate Focus Mode to eliminate noise and execute tasks in high-efficiency intervals.
+              Activate Focus Mode to eliminate noise and execute tasks in focused intervals.
             </p>
           </div>
 
@@ -169,7 +165,7 @@ const Home = () => {
             </div>
             <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">Track &amp; Reflect</h3>
             <p className="text-sm text-slate-600 dark:text-slate-400 max-w-xs">
-              Review weekly milestones, reflect on time spent, and maintain steady academic momentum.
+              Review weekly milestones, reflect on time spent and maintain steady academic momentum.
             </p>
           </div>
         </div>
@@ -186,9 +182,7 @@ const Home = () => {
           </h2>
 
           <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-sm sm:text-base">
-            StudySync is built to replace chaotic to-do lists and fragmented spreadsheets with a single,
-            serene study hub. Developed with modern web technologies, full authentication, and a restful
-            Powder Blue &amp; Mint aesthetic, it keeps learners in control of their academic journey.
+            StudySync replaces chaotic task lists and scattered spreadsheets with a single serene study hub. Designed with a calming interface and focused tools, it keeps learners in control of their academic journey.
           </p>
         </div>
       </section>

@@ -123,10 +123,6 @@ const Signup = () => {
         <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-xl p-6 sm:p-8 transition-all">
           {/* Header */}
           <div className="text-center mb-6">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-powder-100 dark:bg-powder-900/40 text-powder-700 dark:text-powder-300 mb-3">
-              <span className="w-1.5 h-1.5 rounded-full bg-powder-500"></span>
-              Create Account
-            </div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
               Join StudySync
             </h1>
@@ -354,7 +350,7 @@ const Signup = () => {
               to="/login"
               className="font-semibold text-powder-600 hover:text-powder-700 dark:text-powder-400 dark:hover:text-powder-300 transition"
             >
-              Sign In &rarr;
+              Sign In
             </Link>
           </div>
         </div>
