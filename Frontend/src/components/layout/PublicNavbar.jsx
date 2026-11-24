@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Sun, Moon, Menu, X } from 'lucide-react';
+import logoImg from '../../assets/logo.png';
 
 /**
  * Navigation links for the public landing page.
@@ -106,12 +107,11 @@ const PublicNavbar = ({ darkMode, onToggleTheme }) => {
             className="flex items-center gap-2.5 group focus:outline-hidden focus-visible:ring-2 focus-visible:ring-powder-500 rounded-xl py-1 px-1 transition"
             aria-label="StudySync - Back to top"
           >
-            {/* Existing StudySync Brand Logo Icon */}
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-powder-600 via-powder-500 to-mint-400 flex items-center justify-center text-white font-extrabold shadow-xs transition-transform duration-200 group-hover:scale-105">
-              <span className="text-sm tracking-tight font-black">SS</span>
-            </div>
-
-            {/* Project Name */}
+            <img
+              src={logoImg}
+              alt="StudySync Logo"
+              className="h-9 w-auto max-h-10 object-contain transition-transform duration-200 group-hover:scale-105"
+            />
             <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
               Study<span className="text-powder-600 dark:text-powder-400">Sync</span>
             </span>

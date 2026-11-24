@@ -22,6 +22,8 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
 import NavItem from '../navigation/NavItem';
+import logoImg from '../../assets/logo.png';
+import iconImg from '../../assets/favicon.png';
 
 /**
  * Sidebar
@@ -95,28 +97,33 @@ const Sidebar = ({
           <Link
             to="/dashboard"
             onClick={handleNavClick}
-            className={`flex items-center gap-3 group overflow-hidden ${
-              isCollapsed ? 'justify-center w-full' : ''
+            className={`flex items-center group overflow-hidden ${
+              isCollapsed ? 'justify-center w-full' : 'gap-3'
             }`}
           >
-            {/* Brand Logo Icon */}
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-powder-600 via-powder-500 to-mint-400 flex items-center justify-center text-white font-extrabold shadow-sm shrink-0 transition-transform group-hover:scale-105">
-              <span className="text-sm tracking-tighter">SS</span>
-            </div>
-
-            {/* Brand Name (hidden when collapsed on desktop) */}
-            <div
-              className={`flex flex-col transition-opacity duration-200 ${
-                isCollapsed ? 'lg:hidden' : 'block'
-              }`}
-            >
-              <span className="text-lg font-bold tracking-tight text-slate-900 dark:text-white leading-tight">
-                Study<span className="text-powder-600 dark:text-powder-400">Sync</span>
-              </span>
-              <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                Workspace
-              </span>
-            </div>
+            {isCollapsed ? (
+              <img
+                src={iconImg}
+                alt="StudySync"
+                className="w-8 h-8 object-contain transition-transform group-hover:scale-105"
+              />
+            ) : (
+              <div className="flex items-center gap-2.5">
+                <img
+                  src={logoImg}
+                  alt="StudySync Logo"
+                  className="h-8 w-auto object-contain transition-transform group-hover:scale-105"
+                />
+                <div className="flex flex-col">
+                  <span className="text-lg font-bold tracking-tight text-slate-900 dark:text-white leading-tight">
+                    Study<span className="text-powder-600 dark:text-powder-400">Sync</span>
+                  </span>
+                  <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                    Workspace
+                  </span>
+                </div>
+              </div>
+            )}
           </Link>
 
           {/* Mobile Close Button */}

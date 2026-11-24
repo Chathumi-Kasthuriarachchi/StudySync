@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff, LogIn } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { DotPattern } from '../../components/ui/dot-pattern';
+import logoImg from '../../assets/logo.png';
 
 const GoogleIcon = () => (
   <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -92,7 +93,10 @@ const Login = () => {
       <div className="relative z-10 w-full max-w-md mx-auto">
         <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-xl p-6 sm:p-8 transition-all">
           {/* Header */}
-          <div className="text-center mb-6">
+          <div className="text-center mb-6 flex flex-col items-center">
+            <Link to="/" className="inline-block mb-3">
+              <img src={logoImg} alt="StudySync" className="h-10 w-auto object-contain hover:opacity-90 transition" />
+            </Link>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
               Welcome back
             </h1>
