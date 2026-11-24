@@ -15,143 +15,263 @@ const Privacy = () => {
         <div className="mb-10">
           <Link
             to="/"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-powder-600 dark:hover:text-powder-400 transition mb-8"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-powder-600 dark:hover:text-powder-400 transition mb-6"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
             Back to StudySync
           </Link>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-mint-100 dark:bg-mint-900/40 text-mint-700 dark:text-mint-300 mb-3">
-            Legal
-          </div>
           <h1 className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">
             Privacy Policy
           </h1>
-          <p className="mt-3 text-slate-500 dark:text-slate-400 text-sm">Last Updated: {LAST_UPDATED}</p>
+          <p className="mt-2 text-slate-500 dark:text-slate-400 text-sm">Last Updated: {LAST_UPDATED}</p>
         </div>
 
-        {/* Content */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-8 sm:p-10 prose prose-slate dark:prose-invert max-w-none">
-          <p className="lead text-slate-600 dark:text-slate-300">
-            At StudySync, we are committed to protecting your privacy and personal data.
-            This Privacy Policy explains how we collect, use, store, and protect your information
-            when you use our platform.
+        {/* Content Card */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-8 sm:p-10 text-slate-700 dark:text-slate-300">
+          <p className="text-base sm:text-lg leading-relaxed text-slate-600 dark:text-slate-300 pb-8 mb-8 border-b border-slate-100 dark:border-slate-800">
+            At StudySync, we value your privacy and keep your personal data protected.
+            This Privacy Policy outlines how we collect, store, handle and protect your information
+            whenever you access the platform.
           </p>
 
-          <h2>1. Information We Collect</h2>
-          <h3>Information You Provide</h3>
-          <ul>
-            <li><strong>Account information</strong>: Name, email address, and password when you register</li>
-            <li><strong>Profile information</strong>: Optional profile picture and display name</li>
-            <li><strong>Content data</strong>: Tasks, projects, notes, and other content you create</li>
-            <li><strong>Communications</strong>: Messages you send to our support team</li>
-          </ul>
+          {/* Section 1 */}
+          <div className="pb-8 mb-8 border-b border-slate-100 dark:border-slate-800">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">1. Information We Collect</h2>
+            
+            <h3 className="text-sm font-bold uppercase tracking-wider text-powder-600 dark:text-powder-400 mb-3">
+              Information You Provide
+            </h3>
+            <ul className="space-y-2.5 text-sm mb-6">
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-powder-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Account information:</strong> Full name, verified email address and encrypted password created during registration</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-powder-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Profile details:</strong> Optional profile picture and custom display name</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-powder-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Workspace content:</strong> Tasks, study goals, timetable entries and notes you create</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-powder-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Support inquiries:</strong> Messages and questions submitted directly to our support team</span>
+              </li>
+            </ul>
 
-          <h3>Information Collected Automatically</h3>
-          <ul>
-            <li><strong>Usage data</strong>: Pages visited, features used, and interactions within the platform</li>
-            <li><strong>Device information</strong>: Browser type, operating system, and user agent string</li>
-            <li><strong>IP address</strong>: Used for security monitoring and rate limiting</li>
-            <li><strong>Session data</strong>: Authentication tokens and session identifiers</li>
-          </ul>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-powder-600 dark:text-powder-400 mb-3">
+              Information Collected Automatically
+            </h3>
+            <ul className="space-y-2.5 text-sm">
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-mint-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Usage records:</strong> Feature visits, navigation paths and workflow activity</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-mint-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Device data:</strong> Browser family, operating system and general technical parameters</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-mint-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">IP address:</strong> Recorded strictly for rate limits, session validation and security monitoring</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-mint-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Session tokens:</strong> Encrypted identifiers used to verify valid user sessions</span>
+              </li>
+            </ul>
+          </div>
 
-          <h2>2. How We Use Your Information</h2>
-          <p>We use your information to:</p>
-          <ul>
-            <li>Provide and operate the StudySync service</li>
-            <li>Authenticate your identity and maintain account security</li>
-            <li>Send account-related emails (verification codes, password resets)</li>
-            <li>Improve and personalize the platform experience</li>
-            <li>Detect and prevent fraud, abuse, and security threats</li>
-            <li>Comply with legal obligations</li>
-          </ul>
+          {/* Section 2 */}
+          <div className="pb-8 mb-8 border-b border-slate-100 dark:border-slate-800">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">2. How We Use Your Information</h2>
+            <ul className="space-y-2.5 text-sm">
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-powder-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Provide core functionality:</strong> Deliver task boards, focus tracking timers and collaborative workspaces</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-powder-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Identity verification:</strong> Confirm identity during sign in and protect account integrity</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-powder-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">System notifications:</strong> Send verification codes and password reset instructions</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-powder-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Performance enhancements:</strong> Optimize page speed, platform responsiveness and stability</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-powder-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Threat prevention:</strong> Detect and mitigate unauthorized intrusions, abuse or fraudulent actions</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-powder-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Legal compliance:</strong> Meet applicable statutory and regulatory requirements</span>
+              </li>
+            </ul>
+          </div>
 
-          <h2>3. Data Storage and Security</h2>
-          <p>
-            Your data is stored in MongoDB Atlas on cloud infrastructure. We implement the following
-            security measures:
-          </p>
-          <ul>
-            <li>Passwords are hashed using bcrypt (cost factor 12) — never stored in plain text</li>
-            <li>Authentication tokens use industry-standard JWT with short expiry (15 minutes)</li>
-            <li>Refresh tokens are stored as SHA-256 hashes — the raw token is never persisted</li>
-            <li>OTP verification codes are bcrypt-hashed before storage</li>
-            <li>All data transmission uses HTTPS encryption in production</li>
-          </ul>
+          {/* Section 3 */}
+          <div className="pb-8 mb-8 border-b border-slate-100 dark:border-slate-800">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">3. Data Storage and Security</h2>
+            <p className="text-sm leading-relaxed mb-4">
+              Your data is hosted on secure cloud infrastructure through MongoDB Atlas.
+              We implement industry standard protection measures:
+            </p>
+            <ul className="space-y-2.5 text-sm">
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-mint-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Password protection:</strong> Hashed using salted bcrypt algorithms and never stored in plain text</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-mint-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Access tokens:</strong> Short lived JWT tokens expiring every 15 minutes to reduce exposure</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-mint-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Refresh security:</strong> Saved as SHA-256 hashes so the raw token is never written to disk</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-mint-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Verification codes:</strong> Encrypted before storage and deleted immediately upon expiration</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-mint-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Transport encryption:</strong> Mandatory HTTPS encryption across all client and API traffic</span>
+              </li>
+            </ul>
+          </div>
 
-          <h2>4. Data Sharing</h2>
-          <p>
-            We do not sell your personal data. We may share your information with:
-          </p>
-          <ul>
-            <li><strong>Service providers</strong>: Email delivery services (Resend) used solely to send verification emails</li>
-            <li><strong>Legal authorities</strong>: When required by law or to protect the rights and safety of users</li>
-          </ul>
-          <p>
-            We do not share your personal data with third parties for advertising or marketing purposes.
-          </p>
+          {/* Section 4 */}
+          <div className="pb-8 mb-8 border-b border-slate-100 dark:border-slate-800">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">4. Data Sharing and Third Parties</h2>
+            <p className="text-sm leading-relaxed mb-4">
+              We never sell your personal information. Information is shared only under specific circumstances:
+            </p>
+            <ul className="space-y-2.5 text-sm mb-4">
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-powder-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Email dispatchers:</strong> Transactional providers (such as Resend) used strictly to deliver verification codes</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-powder-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Legal authorities:</strong> Disclosed only when formally mandated by law or necessary to protect user safety</span>
+              </li>
+            </ul>
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              We do not share your personal records with external advertisers or commercial data brokers.
+            </p>
+          </div>
 
-          <h2>5. Cookies and Local Storage</h2>
-          <p>StudySync uses the following browser storage mechanisms:</p>
-          <ul>
-            <li>
-              <strong>HttpOnly Cookies</strong>: Used to store refresh tokens. These are not accessible
-              to JavaScript and are cleared on logout.
-            </li>
-            <li>
-              <strong>localStorage</strong>: Used to store your short-lived access token and theme preferences.
-            </li>
-          </ul>
-          <p>
-            We do not use third-party tracking cookies or advertising cookies.
-          </p>
+          {/* Section 5 */}
+          <div className="pb-8 mb-8 border-b border-slate-100 dark:border-slate-800">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">5. Cookies and Local Storage</h2>
+            <ul className="space-y-2.5 text-sm mb-4">
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-mint-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">HttpOnly cookies:</strong> Hold refresh tokens securely away from client side scripts and clear upon logout</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-mint-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Local storage:</strong> Stores temporary access tokens and your selected theme appearance</span>
+              </li>
+            </ul>
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              StudySync does not use cross site tracking cookies or behavioral marketing beacons.
+            </p>
+          </div>
 
-          <h2>6. Data Retention</h2>
-          <p>
-            We retain your data for as long as your account is active. Expired authentication sessions
-            are automatically deleted via database TTL indexes. OTP records expire after 5 minutes.
-            When you delete your account, your personal data is permanently removed within 30 days.
-          </p>
+          {/* Section 6 */}
+          <div className="pb-8 mb-8 border-b border-slate-100 dark:border-slate-800">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">6. Retention and Account Deletion</h2>
+            <ul className="space-y-2.5 text-sm">
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-powder-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Active accounts:</strong> Your data remains retained while your account stays open</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-powder-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Automated expiry:</strong> Stale sessions clear via database TTL indexes while verification codes expire in 5 minutes</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-powder-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Account deletion:</strong> Deleting your account permanently cleans all personal information within 30 days</span>
+              </li>
+            </ul>
+          </div>
 
-          <h2>7. Your Rights</h2>
-          <p>You have the right to:</p>
-          <ul>
-            <li>Access the personal data we hold about you</li>
-            <li>Correct inaccurate personal data</li>
-            <li>Request deletion of your account and associated data</li>
-            <li>Export your task and project data</li>
-            <li>Withdraw consent at any time by deleting your account</li>
-          </ul>
+          {/* Section 7 */}
+          <div className="pb-8 mb-8 border-b border-slate-100 dark:border-slate-800">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">7. Your Privacy Rights</h2>
+            <ul className="space-y-2.5 text-sm">
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-mint-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Data access:</strong> Inspect the personal information connected to your profile</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-mint-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Corrections:</strong> Correct inaccurate profile and account information</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-mint-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Permanent erasure:</strong> Request complete deletion of your account and saved data</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-mint-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Data portability:</strong> Export your task records and project data whenever needed</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-mint-500 mt-2 shrink-0"></span>
+                <span><strong className="text-slate-900 dark:text-white">Revoke consent:</strong> Delete your profile at any time to withdraw platform consent</span>
+              </li>
+            </ul>
+          </div>
 
-          <h2>8. Children's Privacy</h2>
-          <p>
-            StudySync is not intended for users under the age of 13. We do not knowingly collect
-            personal data from children. If we become aware of such collection, we will promptly
-            delete the account and associated data.
-          </p>
+          {/* Section 8 */}
+          <div className="pb-8 mb-8 border-b border-slate-100 dark:border-slate-800">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">8. Children's Privacy</h2>
+            <p className="text-sm leading-relaxed">
+              <strong className="text-slate-900 dark:text-white">Age requirement:</strong> StudySync is intended for individuals aged 13 and older.
+              We do not knowingly collect personal information from children. If an account belonging to a minor under 13 is identified,
+              it will be removed promptly along with associated data.
+            </p>
+          </div>
 
-          <h2>9. Third-Party Links</h2>
-          <p>
-            StudySync may contain links to external websites. We are not responsible for the privacy
-            practices of third-party sites. We encourage you to review their privacy policies.
-          </p>
+          {/* Section 9 */}
+          <div className="pb-8 mb-8 border-b border-slate-100 dark:border-slate-800">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">9. Third Party Links</h2>
+            <p className="text-sm leading-relaxed">
+              <strong className="text-slate-900 dark:text-white">External sites:</strong> StudySync may provide links to external websites.
+              We do not oversee or control the privacy practices of external platforms and recommend reviewing their respective privacy policies.
+            </p>
+          </div>
 
-          <h2>10. Changes to This Policy</h2>
-          <p>
-            We may update this Privacy Policy periodically. We will notify you of significant changes
-            by email or via in-app notification. Continued use of StudySync after changes constitutes
-            acceptance of the updated policy.
-          </p>
+          {/* Section 10 */}
+          <div className="pb-8 mb-8 border-b border-slate-100 dark:border-slate-800">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">10. Policy Updates</h2>
+            <p className="text-sm leading-relaxed">
+              <strong className="text-slate-900 dark:text-white">Periodic revisions:</strong> We may revise this Privacy Policy periodically.
+              Substantial adjustments will be communicated through email or announcements on the dashboard. Continued participation after updates
+              represents acceptance of revised terms.
+            </p>
+          </div>
 
-          <h2>11. Contact</h2>
-          <p>
-            If you have questions or concerns about this Privacy Policy or wish to exercise your
-            data rights, please contact us at:{' '}
-            <a href="mailto:privacy@studysync.app" className="text-powder-600 dark:text-powder-400 hover:underline">
-              privacy@studysync.app
-            </a>
-          </p>
+          {/* Section 11 */}
+          <div>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">11. Contact Us</h2>
+            <p className="text-sm leading-relaxed">
+              <strong className="text-slate-900 dark:text-white">Reach our privacy team:</strong> For questions about this policy or to exercise your data rights,
+              contact us at{' '}
+              <a href="mailto:privacy@studysync.app" className="text-powder-600 dark:text-powder-400 hover:underline font-medium">
+                privacy@studysync.app
+              </a>
+            </p>
+          </div>
         </div>
 
         {/* Footer Links */}

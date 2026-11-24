@@ -12,7 +12,10 @@ const connectDB = async () => {
         if (!connUri) {
             throw new Error("MongoDB connection URI not found in environment variables");
         }
-        const conn = await mongoose.connect(connUri);
+        const conn = await mongoose.connect(connUri, {
+            // Allows connection when local Windows security suites or antivirus intercept TLS certificates
+            tlsAllowInvalidCertificates: true,
+        });
         console.log(`MongoDB Connected: ${conn.connection.host}`);
     } catch (error) {
         console.error("Error connecting to MongoDB:", error.message);
